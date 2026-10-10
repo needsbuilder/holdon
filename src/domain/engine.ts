@@ -5,7 +5,7 @@
  * policy always produce the same verdict. It reads no clock, makes no network
  * call and consults no language model (design principle 1).
  */
-import { describeBlockedMethods, sayCheck } from './language.js';
+import { sayCheck } from './language.js';
 import { verifyPayee, type Registry } from './registry.js';
 import { inferMethod, matchPatterns, type Features, type RuleSet } from './rules.js';
 import { containsPhrase, methodLabel, normalizeText } from './text.js';
@@ -186,5 +186,3 @@ export function pickClarifyingQuestion(input: CheckInput, ctx: EngineContext): C
   if (outcome.method_source === 'unknown') return 'payment_method';
   return undefined;
 }
-
-export { describeBlockedMethods };

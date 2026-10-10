@@ -6,7 +6,7 @@
  * person. Design principle 2: these builders only ever receive registry facts
  * and Hold On's own wording, never the phone number or link from the message.
  */
-import { formatUsd, listWords, methodLabel } from './text.js';
+import { formatUsd, methodLabel } from './text.js';
 import type {
   HoldStatus,
   OfficialInfo,
@@ -182,10 +182,6 @@ export function sayInbox(count: number, memberName?: string): string {
   return count === 1
     ? `One request from ${member} is waiting for your decision.`
     : `${count} requests from ${member} are waiting for your decision.`;
-}
-
-export function describeBlockedMethods(methods: PaymentMethod[]): string {
-  return listWords(methods.map(methodLabel), 'or');
 }
 
 /** The single clarifying question Hold On may ask through MCP elicitation. */

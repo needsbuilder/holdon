@@ -288,6 +288,18 @@ describe('waiting for a decision', () => {
     expect(waited.say_to_user).toMatch(/hasn't answered yet/);
   });
 
+  it('also streams progress to a 2026-07-28 client', async () => {
+    const modern = await connect(t.url, MEMBER_TOKEN, { mode: 'auto' });
+    expect(modern.getNegotiatedProtocolVersion()).toBe('2026-07-28');
+    const check = await call<any>(modern, 'holdon_check_request', SCENARIOS.utilityBill);
+    const placed = await call<any>(modern, 'holdon_place_hold', { check_id: check.check_id, summary: 'Electric bill' });
+    const progress: Array<{ progress: number }> = [];
+    const result = await modern.callTool({ name: 'holdon_wait_for_decision', arguments: { hold_id: placed.hold_id, timeout_seconds: 1 } }, { onprogress: (update) => progress.push(update) });
+    expect(result.structuredContent).toMatchObject({ status: 'pending_family', timed_out: true });
+    expect(progress.length).toBeGreaterThanOrEqual(2);
+    await modern.close();
+  });
+
   it('returns at once when the hold is already decided', async () => {
     const check = await call<any>(margaret, 'holdon_check_request', SCENARIOS.utilityBill);
     const placed = await call<any>(margaret, 'holdon_place_hold', { check_id: check.check_id, summary: 'Electric bill' });
