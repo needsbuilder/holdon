@@ -25,7 +25,9 @@ import {
   type PaymentMethod,
   type Principal,
 } from '../domain/types.js';
+import { registerAppTool } from '@modelcontextprotocol/ext-apps/server';
 import { HoldOnError, type HoldOnService } from '../service.js';
+import { UI, registerCards, withCard } from './apps.js';
 import { ICONS } from './icons.js';
 import * as S from './schemas.js';
 
@@ -78,7 +80,7 @@ export function buildMcpServer(service: HoldOnService, principal: Principal, opt
       icons: ICONS.check,
     },
     {
-      capabilities: { tools: {} },
+      capabilities: { tools: {}, resources: {} },
       instructions: principal.role === 'member' ? MEMBER_INSTRUCTIONS : CONTACT_INSTRUCTIONS,
     },
   );
@@ -98,6 +100,7 @@ export function buildMcpServer(service: HoldOnService, principal: Principal, opt
 
   if (principal.role === 'member') registerMemberTools(server, service, principal, options, guard);
   else registerContactTools(server, service, principal, guard);
+  registerCards(server, principal.role);
   return server;
 }
 
@@ -195,17 +198,21 @@ function registerMemberTools(server: McpServer, service: HoldOnService, principa
     }),
   );
 
-  server.registerTool(
+  registerAppTool(
+    server,
     'holdon_place_hold',
-    {
-      title: 'Place a hold and ask family',
-      description:
-        'Put a money request on hold and notify the trusted family contact, who approves or denies it. Nothing is paid. Pass the check_id from holdon_check_request so the contact sees the full context. Calling it twice for the same check returns the same hold.',
-      inputSchema: S.PlaceHoldInput,
-      outputSchema: S.PlaceHoldOutput,
-      annotations: { title: 'Place a hold and ask family', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-      icons: ICONS.hold,
-    },
+    withCard(
+      {
+        title: 'Place a hold and ask family',
+        description:
+          'Put a money request on hold and notify the trusted family contact, who approves or denies it. Nothing is paid. Pass the check_id from holdon_check_request so the contact sees the full context. Calling it twice for the same check returns the same hold.',
+        inputSchema: S.PlaceHoldInput,
+        outputSchema: S.PlaceHoldOutput,
+        annotations: { title: 'Place a hold and ask family', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        icons: ICONS.hold,
+      },
+      UI.hold,
+    ),
     guard('holdon_place_hold', (args) => {
       const { hold, notified } = service.placeHold(principal, args);
       const say = service.placedMessage(hold);
@@ -224,17 +231,21 @@ function registerMemberTools(server: McpServer, service: HoldOnService, principa
     }),
   );
 
-  server.registerTool(
+  registerAppTool(
+    server,
     'holdon_get_hold',
-    {
-      title: 'Check on a hold',
-      description:
-        'Look up one hold by id: its status (pending_family, approved, denied, expired, paid or cancelled), the trusted contact\'s decision and note, and what to say to the user. Works across sessions.',
-      inputSchema: S.GetHoldInput,
-      outputSchema: S.GetHoldOutput,
-      annotations: { title: 'Check on a hold', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-      icons: ICONS.hold,
-    },
+    withCard(
+      {
+        title: 'Check on a hold',
+        description:
+          'Look up one hold by id: its status (pending_family, approved, denied, expired, paid or cancelled), the trusted contact\'s decision and note, and what to say to the user. Works across sessions.',
+        inputSchema: S.GetHoldInput,
+        outputSchema: S.GetHoldOutput,
+        annotations: { title: 'Check on a hold', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+        icons: ICONS.hold,
+      },
+      UI.hold,
+    ),
     guard('holdon_get_hold', (args) => {
       const view = service.memberHoldView(service.getHold(principal, args.hold_id));
       return ok(view, `${view.say_to_user}\n\nhold_id: ${view.hold_id} | status: ${view.status} | next_step: ${view.next_step}`);
@@ -265,17 +276,21 @@ function registerMemberTools(server: McpServer, service: HoldOnService, principa
     }),
   );
 
-  server.registerTool(
+  registerAppTool(
+    server,
     'holdon_wait_for_decision',
-    {
-      title: 'Wait for the family decision',
-      description:
-        'Wait up to timeout_seconds for the trusted contact to approve or deny a hold, sending MCP progress notifications while waiting. Returns the current status either way; timed_out is true if the hold is still pending. Call again to keep waiting.',
-      inputSchema: S.WaitForDecisionInput,
-      outputSchema: S.WaitForDecisionOutput,
-      annotations: { title: 'Wait for the family decision', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-      icons: ICONS.wait,
-    },
+    withCard(
+      {
+        title: 'Wait for the family decision',
+        description:
+          'Wait up to timeout_seconds for the trusted contact to approve or deny a hold, sending MCP progress notifications while waiting. Returns the current status either way; timed_out is true if the hold is still pending. Call again to keep waiting.',
+        inputSchema: S.WaitForDecisionInput,
+        outputSchema: S.WaitForDecisionOutput,
+        annotations: { title: 'Wait for the family decision', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+        icons: ICONS.wait,
+      },
+      UI.hold,
+    ),
     guard('holdon_wait_for_decision', async (args, ctx) => {
       const timeoutSeconds = args.timeout_seconds ?? 20;
       const progressToken = ctx.mcpReq._meta?.progressToken;
@@ -307,17 +322,21 @@ function registerMemberTools(server: McpServer, service: HoldOnService, principa
     }),
   );
 
-  server.registerTool(
+  registerAppTool(
+    server,
     'holdon_pay',
-    {
-      title: 'Make the payment (simulated)',
-      description:
-        'Make a SIMULATED payment and return a receipt. Allowed only when the hold is approved, the payee is confirmed (official registry, or vouched for by the trusted contact) and the payment method is allowed. Give hold_id after family approval, or check_id when the check said next_step "pay". Otherwise it returns a clear error saying what is missing. No real money ever moves. Paying the same hold twice returns the same receipt.',
-      inputSchema: S.PayInput,
-      outputSchema: S.PayOutput,
-      annotations: { title: 'Make the payment (simulated)', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
-      icons: ICONS.pay,
-    },
+    withCard(
+      {
+        title: 'Make the payment (simulated)',
+        description:
+          'Make a SIMULATED payment and return a receipt. Allowed only when the hold is approved, the payee is confirmed (official registry, or vouched for by the trusted contact) and the payment method is allowed. Give hold_id after family approval, or check_id when the check said next_step "pay". Otherwise it returns a clear error saying what is missing. No real money ever moves. Paying the same hold twice returns the same receipt.',
+        inputSchema: S.PayInput,
+        outputSchema: S.PayOutput,
+        annotations: { title: 'Make the payment (simulated)', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        icons: ICONS.pay,
+      },
+      UI.receipt,
+    ),
     guard('holdon_pay', (args) => {
       const { receipt } = service.pay(principal, args);
       const say = service.paidMessage(receipt);
@@ -325,16 +344,20 @@ function registerMemberTools(server: McpServer, service: HoldOnService, principa
     }),
   );
 
-  server.registerTool(
+  registerAppTool(
+    server,
     'holdon_cancel_hold',
-    {
-      title: 'Cancel a hold',
-      description: 'Cancel a hold the user no longer wants. Works while the hold is pending or approved; nothing is paid. Cancelling twice is harmless.',
-      inputSchema: S.CancelHoldInput,
-      outputSchema: S.CancelHoldOutput,
-      annotations: { title: 'Cancel a hold', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-      icons: ICONS.cancel,
-    },
+    withCard(
+      {
+        title: 'Cancel a hold',
+        description: 'Cancel a hold the user no longer wants. Works while the hold is pending or approved; nothing is paid. Cancelling twice is harmless.',
+        inputSchema: S.CancelHoldInput,
+        outputSchema: S.CancelHoldOutput,
+        annotations: { title: 'Cancel a hold', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+        icons: ICONS.cancel,
+      },
+      UI.hold,
+    ),
     guard('holdon_cancel_hold', (args) => {
       const view = service.memberHoldView(service.cancelHold(principal, args.hold_id));
       return ok(view, `${view.say_to_user}\n\nhold_id: ${view.hold_id} | status: ${view.status}`);
@@ -343,17 +366,21 @@ function registerMemberTools(server: McpServer, service: HoldOnService, principa
 }
 
 function registerContactTools(server: McpServer, service: HoldOnService, principal: Principal, guard: Guard): void {
-  server.registerTool(
+  registerAppTool(
+    server,
     'holdon_family_inbox',
-    {
-      title: 'Family inbox',
-      description:
-        "See the money requests your family member has on hold, with full context: their own words, the warning signs and the official guidance behind each one, how the payee compares with official records, and whether you can approve. Details taken from the suspicious message are listed for context only; do not call or open them.",
-      inputSchema: S.FamilyInboxInput,
-      outputSchema: S.FamilyInboxOutput,
-      annotations: { title: 'Family inbox', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-      icons: ICONS.family,
-    },
+    withCard(
+      {
+        title: 'Family inbox',
+        description:
+          "See the money requests your family member has on hold, with full context: their own words, the warning signs and the official guidance behind each one, how the payee compares with official records, and whether you can approve. Details taken from the suspicious message are listed for context only; do not call or open them.",
+        inputSchema: S.FamilyInboxInput,
+        outputSchema: S.FamilyInboxOutput,
+        annotations: { title: 'Family inbox', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+        icons: ICONS.family,
+      },
+      UI.approval,
+    ),
     guard('holdon_family_inbox', (args) => {
       const rows = service.familyInbox(principal, args);
       const holds = rows.map((hold) => service.familyHoldView(hold, principal.user_id));
@@ -368,17 +395,21 @@ function registerContactTools(server: McpServer, service: HoldOnService, princip
     }),
   );
 
-  server.registerTool(
+  registerAppTool(
+    server,
     'holdon_family_decide',
-    {
-      title: 'Approve or deny a hold',
-      description:
-        'Approve or deny a hold for your family member. A request that Hold On stopped can only be denied. Approving a payee that is not in the official registry needs trust_payee: true, which records that you personally know them. Your note is read to your family member. Repeating the same decision is harmless; an approval can be changed to a denial until it is paid.',
-      inputSchema: S.FamilyDecideInput,
-      outputSchema: S.FamilyDecideOutput,
-      annotations: { title: 'Approve or deny a hold', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-      icons: ICONS.family,
-    },
+    withCard(
+      {
+        title: 'Approve or deny a hold',
+        description:
+          'Approve or deny a hold for your family member. A request that Hold On stopped can only be denied. Approving a payee that is not in the official registry needs trust_payee: true, which records that you personally know them. Your note is read to your family member. Repeating the same decision is harmless; an approval can be changed to a denial until it is paid.',
+        inputSchema: S.FamilyDecideInput,
+        outputSchema: S.FamilyDecideOutput,
+        annotations: { title: 'Approve or deny a hold', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        icons: ICONS.family,
+      },
+      UI.approval,
+    ),
     guard('holdon_family_decide', (args) => {
       const { hold, trustedPayeeAdded } = service.familyDecide(principal, args);
       const view = service.familyHoldView(hold, principal.user_id);
