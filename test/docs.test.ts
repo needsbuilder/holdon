@@ -1,5 +1,5 @@
 /** Keeps the README and the Agent Skill honest about what the code and data actually contain. */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { loadRegistry } from '../src/domain/registry.js';
 import { loadRules } from '../src/domain/rules.js';
@@ -59,6 +59,15 @@ describe('README', () => {
       expect(stat.source_url).toMatch(/^https:\/\//);
       expect(stat.checked).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(stat.quote.trim().split(/\s+/).length).toBeLessThan(25);
+    }
+  });
+
+  it('only shows screenshots that are in the repository', () => {
+    const images = [...readme.matchAll(/<img src="([^"]+)"/g)].map((match) => match[1]!);
+    expect(images.length).toBeGreaterThanOrEqual(3);
+    for (const image of images) {
+      expect(image, image).toMatch(/^docs\/screenshots\/[a-z0-9-]+\.png$/);
+      expect(existsSync(packagePath(...image.split('/'))), image).toBe(true);
     }
   });
 
