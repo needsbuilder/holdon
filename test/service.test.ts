@@ -97,6 +97,17 @@ describe('hold lifecycle', () => {
     expect(t.service.familyInbox(t.sarah, {})).toHaveLength(1);
   });
 
+  it('refuses a hold whose details differ from the check it refers to', () => {
+    const { check_id } = t.service.checkRequest(t.margaret, { ...SCENARIOS.utilityBill, amount_usd: 64.1 });
+    expect(errorCode(() => t.service.placeHold(t.margaret, { check_id, summary: 'Electric bill', amount_usd: 6400 }))).toBe('invalid_input');
+    expect(errorCode(() => t.service.placeHold(t.margaret, { check_id, summary: 'Electric bill', payee_name: 'Officer Daniels' }))).toBe('invalid_input');
+    expect(errorCode(() => t.service.placeHold(t.margaret, { check_id, summary: 'Electric bill', payment_method: 'wire' }))).toBe('invalid_input');
+    expect(t.service.familyInbox(t.sarah, {})).toEqual([]);
+    // Repeating the checked details is fine.
+    const { hold } = t.service.placeHold(t.margaret, { check_id, summary: 'Electric bill', amount_usd: 64.1, payee_name: 'con edison', payment_method: 'card' });
+    expect(hold).toMatchObject({ amount_cents: 6410, payee_name: 'Con Edison', payment_method: 'card' });
+  });
+
   it('runs a check itself when a hold is placed without one', () => {
     const { hold } = t.service.placeHold(t.margaret, { summary: 'The IRS wants $500 in gift cards', payee_name: 'IRS', amount_usd: 500 });
     expect(hold.blocked).toBe(true);

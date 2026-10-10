@@ -228,16 +228,18 @@ export const VerifyPayeeOutput = payee.extend({
 });
 
 export const PlaceHoldInput = z.object({
-  check_id: checkId.optional().describe('The check this hold is for. Strongly preferred: it carries the full context to the trusted contact.'),
+  check_id: checkId
+    .optional()
+    .describe('The check this hold is for. Strongly preferred: it carries the full context to the trusted contact. With a check_id, the amount, payee and method come from the check; giving different values here is an error.'),
   summary: z
     .string('summary is required: one sentence the trusted contact will read.')
     .trim()
     .min(3, 'summary is too short: write one sentence the trusted contact will read.')
     .max(500)
     .describe('One sentence the trusted contact will read, for example "Mom was asked to pay $2,000 in gift cards to someone claiming to be the IRS."'),
-  amount_usd: amountUsd.optional(),
-  payee_name: z.string().trim().min(1).max(200).optional(),
-  payment_method: paymentMethod.optional(),
+  amount_usd: amountUsd.optional().describe('Only needed without a check_id.'),
+  payee_name: z.string().trim().min(1).max(200).optional().describe('Only needed without a check_id.'),
+  payment_method: paymentMethod.optional().describe('Only needed without a check_id.'),
 });
 
 export const PlaceHoldOutput = z.object({

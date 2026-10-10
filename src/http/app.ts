@@ -44,6 +44,8 @@ export interface AppOptions {
   /** Extra origin hostnames (beyond localhost) allowed to call the server from a browser. */
   allowedOrigins?: string[];
   webhookUrl?: string;
+  /** Print each new hold's signed approval link to the log, so the demo works with only a browser. Default true. */
+  logApprovalLinks?: boolean;
   progressIntervalMs?: number;
   sessionIdleMs?: number;
   log?: (line: string) => void;
@@ -94,6 +96,7 @@ export function createHoldOnApp(options: AppOptions): HoldOnApp {
   const host = options.host ?? '127.0.0.1';
   let publicUrl = options.publicUrl ?? `http://localhost`;
 
+  service.webhookEnabled = Boolean(options.webhookUrl);
   service.approvalUrl = (holdId, contactUserId) =>
     `${publicUrl}/approve/${encodeURIComponent(holdId)}?t=${signApprovalToken(secret, holdId, contactUserId)}`;
 
@@ -303,7 +306,8 @@ export function createHoldOnApp(options: AppOptions): HoldOnApp {
     if (!contact) return;
     const hold = event.hold_id ? service.store.getHold(event.hold_id) : undefined;
     if (event.type === 'hold.created' && hold) {
-      log(`hold placed: ${service.headline(hold)}\n  ${contact.name} can decide at ${service.approvalUrl(hold.id, contact.id)}`);
+      const link = options.logApprovalLinks === false ? '' : `\n  ${contact.name} can decide at ${service.approvalUrl(hold.id, contact.id)}`;
+      log(`hold placed: ${service.headline(hold)}${link}`);
     }
     if (!options.webhookUrl) return;
     const payload = renderEvent(service, event, service.principalOf(contact));

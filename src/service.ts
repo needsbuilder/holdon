@@ -180,6 +180,8 @@ export class HoldOnService {
   readonly rules: RuleSet;
   readonly events = new EventEmitter();
   approvalUrl: (holdId: string, contactUserId: string) => string;
+  /** Set by the HTTP layer when an outgoing webhook is configured, so `notified[].via` can say so. */
+  webhookEnabled = false;
   private readonly clock: () => Date;
 
   constructor(options: ServiceOptions) {
@@ -283,6 +285,19 @@ export class HoldOnService {
         throw new HoldOnError('not_found', `No check with id "${input.check_id}" was found for ${principal.name}. Call holdon_check_request first, or leave check_id out.`);
       }
       check = found;
+      // The check is the record the family will read. A hold may not quietly change what was checked.
+      const changed: string[] = [];
+      if (input.amount_usd !== undefined && input.amount_usd !== check.input.amount_usd) changed.push('amount_usd');
+      if (input.payee_name !== undefined && normalizeName(input.payee_name) !== normalizeName(check.input.payee_name ?? '')) changed.push('payee_name');
+      if (input.payment_method !== undefined && input.payment_method !== 'unknown' && input.payment_method !== check.outcome.effective_method) {
+        changed.push('payment_method');
+      }
+      if (changed.length > 0) {
+        throw new HoldOnError(
+          'invalid_input',
+          `The ${changed.join(' and ')} given here ${changed.length === 1 ? 'differs' : 'differ'} from what was checked. Call holdon_check_request again with the new details, then place the hold with the new check_id.`,
+        );
+      }
       const existing = this.store.findOpenHoldByCheck(check.id);
       if (existing && existing.status === 'pending_family') {
         return { hold: existing, notified: this.notifiedList(contacts), reused: true };
@@ -298,9 +313,8 @@ export class HoldOnService {
       check = this.store.getCheck(created.check_id)!;
     }
 
-    const amount = input.amount_usd ?? check.input.amount_usd;
-    const method =
-      input.payment_method && input.payment_method !== 'unknown' ? input.payment_method : check.outcome.effective_method;
+    const amount = check.input.amount_usd;
+    const method = check.outcome.effective_method;
     const now = this.clock();
     const policy = this.policyOf(principal.circle_id);
     const hold: HoldRow = {
@@ -310,7 +324,7 @@ export class HoldOnService {
       check_id: check.id,
       summary: input.summary,
       amount_cents: amount === undefined ? undefined : toCents(amount),
-      payee_name: input.payee_name ?? check.input.payee_name,
+      payee_name: check.input.payee_name,
       payment_method: method,
       status: 'pending_family',
       blocked: check.outcome.policy.blocked,
@@ -325,7 +339,7 @@ export class HoldOnService {
 
   private notifiedList(contacts: UserRow[]): Array<{ name: string; relationship?: string; via: string[] }> {
     const via = ['family_inbox', 'live_events', 'approval_page'];
-    if (process.env.HOLDON_WEBHOOK_URL) via.push('webhook');
+    if (this.webhookEnabled) via.push('webhook');
     return contacts.map((c) => ({ name: c.name, ...(c.relationship ? { relationship: c.relationship } : {}), via }));
   }
 
@@ -624,7 +638,7 @@ export class HoldOnService {
       throw new HoldOnError('already_decided', `This hold is already ${statusWord(hold.status)}, so it can no longer be ${input.decision === 'approve' ? 'approved' : 'denied'}.`);
     }
 
-    let trustedPayeeAdded = false;
+    let vouch = false;
     const now = this.clock();
     if (input.decision === 'approve') {
       const blocker = this.approvalBlocker(hold, check);
@@ -636,6 +650,24 @@ export class HoldOnService {
             `"${hold.payee_name}" is not in the registry of official payees, so Hold On cannot confirm who they are. To approve, call again with trust_payee: true to say that you personally know and trust this payee. Otherwise deny the request.`,
           );
         }
+        vouch = true;
+      }
+    }
+
+    const policy = this.policyOf(hold.circle_id);
+    // The decision and the vouch are written together, or not at all.
+    const changed = this.store.transaction(() => {
+      const updated = this.store.updateHold(hold.id, [hold.status], {
+        status: target,
+        decision_by: principal.user_id,
+        decision_by_name: principal.name,
+        decision_at: now.toISOString(),
+        decision_note: input.note,
+        // An approval is good for one more expiry window, then lapses unused.
+        ...(target === 'approved' ? { expires_at: new Date(now.getTime() + policy.hold_expiry_hours * 3_600_000).toISOString() } : {}),
+        updated_at: now.toISOString(),
+      });
+      if (updated && vouch) {
         this.store.addTrustedPayee(hold.circle_id, {
           name: hold.payee_name!,
           normalized_name: normalizeName(hold.payee_name!),
@@ -643,21 +675,10 @@ export class HoldOnService {
           added_at: now.toISOString(),
           note: input.note,
         });
-        trustedPayeeAdded = true;
       }
-    }
-
-    const policy = this.policyOf(hold.circle_id);
-    const changed = this.store.updateHold(hold.id, [hold.status], {
-      status: target,
-      decision_by: principal.user_id,
-      decision_by_name: principal.name,
-      decision_at: now.toISOString(),
-      decision_note: input.note,
-      // An approval is good for one more expiry window, then lapses unused.
-      ...(target === 'approved' ? { expires_at: new Date(now.getTime() + policy.hold_expiry_hours * 3_600_000).toISOString() } : {}),
-      updated_at: now.toISOString(),
+      return updated;
     });
+    const trustedPayeeAdded = changed && vouch;
     if (!changed) return this.familyDecide(principal, input);
     this.emit('hold.decided', hold.circle_id, hold.id);
     return { hold: this.store.getHold(hold.id)!, trustedPayeeAdded };

@@ -27,6 +27,7 @@ async function main(): Promise<void> {
     allowedHosts: config.allowedHosts,
     allowedOrigins: config.allowedOrigins,
     webhookUrl: config.webhookUrl,
+    logApprovalLinks: config.logApprovalLinks,
     progressIntervalMs: config.progressIntervalMs,
     log: (line) => console.log(`[holdon] ${line}`),
   });

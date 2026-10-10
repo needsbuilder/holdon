@@ -14,6 +14,8 @@ export interface Config {
   allowedHosts?: string[];
   allowedOrigins?: string[];
   webhookUrl?: string;
+  /** Print signed approval links to the log. Handy for a local demo; switch off anywhere logs are shared. */
+  logApprovalLinks: boolean;
   progressIntervalMs: number;
 }
 
@@ -52,6 +54,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     allowedHosts: list(env.HOLDON_ALLOWED_HOSTS),
     allowedOrigins: list(env.HOLDON_ALLOWED_ORIGINS),
     webhookUrl: env.HOLDON_WEBHOOK_URL,
+    logApprovalLinks: env.HOLDON_LOG_APPROVAL_LINKS !== '0',
     progressIntervalMs: Number(env.HOLDON_PROGRESS_INTERVAL_MS ?? 2000),
   };
 }
