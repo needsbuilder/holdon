@@ -8,7 +8,7 @@
 import { sayCheck } from './language.js';
 import { verifyPayee, type Registry } from './registry.js';
 import { inferMethod, matchPatterns, type Features, type RuleSet } from './rules.js';
-import { containsPhrase, methodLabel, normalizeText } from './text.js';
+import { containsPhrase, hostMention, methodLabel, normalizeText } from './text.js';
 import {
   POLICY_FLOOR_BLOCKED_METHODS,
   type CheckInput,
@@ -84,7 +84,10 @@ export function explainReasons(outcome: Pick<CheckOutcome, 'risk_signals' | 'pay
     ...outcome.payee.mismatches.filter((mismatch) => mismatch.severity === 'high').map((mismatch) => mismatch.detail),
   ]);
   const policy: HoldReason[] = outcome.policy.blocked_reasons.filter((reason) => !explained.has(reason)).map((text) => ({ kind: 'policy', blocking: true, text }));
-  const all = [...patterns, ...facts, ...policy];
+  const all = [...patterns, ...facts, ...policy].map((reason) => {
+    const mention = reason.source ? hostMention(reason.text, reason.source.url) : undefined;
+    return mention && reason.source ? { ...reason, source: { ...reason.source, named_in_text: mention } } : reason;
+  });
   return [...all.filter((reason) => reason.blocking), ...all.filter((reason) => !reason.blocking)];
 }
 

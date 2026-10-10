@@ -65,6 +65,28 @@ export function extractHost(value: string): string | undefined {
   }
 }
 
+/**
+ * The website name inside `text` that stands for the page at `url`, if the
+ * text already names it: "irs.gov" in "...publishes on irs.gov." for a page on
+ * www.irs.gov, or "duke-energy.com" for a page on news.duke-energy.com.
+ *
+ * Lets a view turn that mention into the source link instead of printing the
+ * website a second time after the sentence. Pure; changes no wording.
+ */
+export function hostMention(text: string, url: string): string | undefined {
+  const host = extractHost(url);
+  if (!host) return undefined;
+  const labels = host.split('.');
+  // The full host first, then its parent domains, never a bare top-level domain.
+  for (let start = 0; start <= labels.length - 2; start += 1) {
+    const candidate = labels.slice(start).join('.');
+    const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = new RegExp(`(^|[^a-z0-9.-])(${escaped})(?![a-z0-9-]|\\.[a-z0-9])`, 'i').exec(text);
+    if (match) return match[2];
+  }
+  return undefined;
+}
+
 export function hostMatchesDomain(host: string, domain: string): boolean {
   const d = domain.toLowerCase();
   return host === d || host.endsWith(`.${d}`);

@@ -19,6 +19,9 @@ import type {
 
 export const SIMULATED_NOTE = 'This is a demonstration: the payment is simulated and no real money moves.';
 
+/** The line under every card and under the approval page. The cards carry the same sentence (ui/shared.js). */
+export const SIMULATED_FOOTER = 'Demonstration only: payments are simulated and no real money moves.';
+
 function officialContactLine(official: OfficialInfo | undefined): string {
   if (!official) return '';
   const phone = official.phones[0];

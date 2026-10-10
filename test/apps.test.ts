@@ -48,7 +48,7 @@ async function until(condition: () => boolean, what: string): Promise<void> {
 }
 
 /** Load a card in jsdom and connect the official AppBridge to it as the host. */
-async function openCard(html: string, client: Client, hostCapabilities: Record<string, unknown> = { serverTools: {} }) {
+async function openCard(html: string, client: Client, hostCapabilities: Record<string, unknown> = { serverTools: {} }, hostContext?: Record<string, unknown>) {
   const fromCard: unknown[] = [];
   let deliver: ((message: unknown) => void) | undefined;
   const dom = new JSDOM(html, {
@@ -84,7 +84,7 @@ async function openCard(html: string, client: Client, hostCapabilities: Record<s
 
   const calls: Array<{ name: string; arguments?: Record<string, unknown> }> = [];
   const opened: string[] = [];
-  const bridge = new AppBridge(null, { name: 'test-host', version: '1.0.0' }, hostCapabilities as never);
+  const bridge = new AppBridge(null, { name: 'test-host', version: '1.0.0' }, hostCapabilities as never, hostContext ? ({ hostContext } as never) : undefined);
   bridge.onopenlink = async ({ url }) => {
     opened.push(url);
     return {};
@@ -225,6 +225,10 @@ describe('receipt card', () => {
     expect(card.text()).toContain('To Con Edison');
     expect(card.text()).toContain('Credit or debit card');
     expect(card.text()).toContain((paid.structuredContent as any).confirmation);
+    // The long receipt number is marked so the stylesheet can keep it on one line at phone width.
+    const receiptNumber = card.document.querySelector('dd.code')!;
+    expect(receiptNumber.textContent).toBe((paid.structuredContent as any).receipt_id);
+    expect(card.document.querySelectorAll('dd.code')).toHaveLength(1);
   });
 });
 
@@ -240,6 +244,9 @@ describe('approval card (trusted contact)', () => {
     expect(card.document.querySelector('h1')!.textContent).toBe('Margaret Ellis asked to make a payment');
     expect(card.document.querySelector('.amount')!.textContent).toBe('$2,000 to IRS');
     expect(card.document.querySelector('.verdict .tag')!.textContent).toBe('Stopped by Hold On');
+    // A stopped request is not "waiting for a decision": it says what is true, that nothing will be paid.
+    expect(card.document.querySelector('.verdict .state')!.textContent).toBe('Nothing will be paid');
+    expect(card.text()).not.toContain('Waiting for your decision');
     expect(card.text()).toContain('simulated payments');
 
     // Why it was stopped: a list, one reason per item, in the words of the rules and registry files.
@@ -275,6 +282,9 @@ describe('approval card (trusted contact)', () => {
     (card.document.getElementById('note') as HTMLTextAreaElement).value = 'Mom, that was not the IRS. Calling you now.';
     card.button('Deny')!.click();
     await until(() => card.document.querySelector('h1')?.textContent === 'Denied', 'the denied state');
+    // One statement, not two: the headline says "Denied" and the sentence under it does not say it again.
+    expect(card.document.querySelector('.say')!.textContent).toBe('The $2,000 payment to IRS will not be made, and Margaret will be told. A short call to talk it through can help.');
+    expect(card.text().match(/Denied/g)).toHaveLength(1);
 
     expect(card.calls).toEqual([{ name: 'holdon_family_decide', arguments: { hold_id: placed.hold_id, decision: 'deny', note: 'Mom, that was not the IRS. Calling you now.' } }]);
     expect(t.store.getHold(placed.hold_id)).toMatchObject({ status: 'denied', decision_note: 'Mom, that was not the IRS. Calling you now.' });
@@ -296,12 +306,20 @@ describe('approval card (trusted contact)', () => {
     const links = [...card.document.querySelectorAll('a')] as HTMLAnchorElement[];
     expect(links.length).toBeGreaterThanOrEqual(4);
     for (const link of links) {
-      expect(link.className).toBe('source');
+      expect(link.className).toMatch(/^source( in-text)?$/);
       expect(link.getAttribute('href')).toMatch(/^https:\/\//);
       expect(official.has(link.getAttribute('href')!), link.getAttribute('href')!).toBe(true);
       expect(link.getAttribute('aria-label')).toMatch(/^Source: /);
     }
     const reasonLinks = [...card.document.querySelectorAll('ul.reasons a')] as HTMLAnchorElement[];
+    // A reason that already names the official website shows it once: the mention itself is the link.
+    const linkReason = [...card.document.querySelectorAll('ul.reasons > li')].find((item) => item.textContent!.startsWith('The link that was given'))!;
+    expect(linkReason.textContent).toBe("The link that was given is not on Internal Revenue Service's official site, irs.gov.");
+    expect(linkReason.textContent!.match(/irs\.gov/g)).toHaveLength(1);
+    expect(linkReason.querySelectorAll('a')).toHaveLength(1);
+    expect(linkReason.querySelector('a')!.className).toBe('source in-text');
+    expect(linkReason.querySelector('a')!.textContent).toBe('irs.gov');
+    expect(linkReason.querySelector('a')!.getAttribute('href')).toBe('https://www.irs.gov/help/tax-scams/recognize-tax-scams-and-fraud');
     expect(reasonLinks.map((link) => link.getAttribute('href'))).toContain('https://consumer.ftc.gov/articles/avoiding-and-reporting-gift-card-scams');
     expect(reasonLinks.map((link) => link.getAttribute('href'))).toContain('https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays');
     // What the caller supplied is text only.
@@ -344,10 +362,29 @@ describe('approval card (trusted contact)', () => {
     await card.bridge.sendToolResult((await sarah.callTool({ name: 'holdon_family_inbox', arguments: { status: 'all' } })) as never);
     await until(() => card.text().includes('Approved by Sarah Ellis.'), 'the decided state');
     expect(card.document.querySelector('.amount')!.textContent).toBe('$182.40 to Con Edison');
-    expect(card.document.querySelector('.verdict .state')!.textContent).toBe('Approved');
+    // The decision is stated once, in the decision box, not also next to the verdict.
+    expect(card.document.querySelector('.verdict .state')).toBeNull();
+    expect(card.text().match(/Approved/g)).toHaveLength(1);
     expect(card.text()).toContain('Note: Looks right, Mom.');
     expect(card.document.querySelectorAll('button')).toHaveLength(0);
     expect([...card.document.querySelectorAll('[data-above-fold]')].map((node) => node.getAttribute('data-above-fold'))).toEqual(['who', 'amount', 'verdict', 'decision']);
+
+    // Once Margaret has paid, the card still credits Sarah with the approval only, not with the payment.
+    await call(margaret, 'holdon_pay', { hold_id: placed.hold_id });
+    await card.bridge.sendToolResult((await sarah.callTool({ name: 'holdon_family_inbox', arguments: { status: 'all' } })) as never);
+    await until(() => card.text().includes('Paid (simulated).'), 'the paid state');
+    expect(card.document.querySelector('.decided [role="status"]')!.textContent).toBe('Approved by Sarah Ellis. Paid (simulated).');
+  });
+
+  it('says what became of a request nobody decided', async () => {
+    const check = await call<any>(margaret, 'holdon_check_request', SCENARIOS.contractorDeposit);
+    const placed = await call<any>(margaret, 'holdon_place_hold', { check_id: check.check_id, summary: 'Roofer deposit' });
+    await call(margaret, 'holdon_cancel_hold', { hold_id: placed.hold_id });
+    const card = await openCard(await readCard(sarah, 'ui://holdon/approval-card.html'), sarah);
+    await card.bridge.sendToolResult((await sarah.callTool({ name: 'holdon_family_inbox', arguments: { status: 'all' } })) as never);
+    await until(() => Boolean(card.document.querySelector('.decided')), 'the closed state');
+    expect(card.document.querySelector('.decided [role="status"]')!.textContent).toBe('Cancelled by your family member.');
+    expect(card.document.querySelectorAll('button')).toHaveLength(0);
   });
 
   it('approves a verified bill', async () => {
@@ -363,9 +400,31 @@ describe('approval card (trusted contact)', () => {
     expect(card.document.getElementById('trust')).toBeNull();
     expect([...card.document.querySelectorAll('[data-above-fold]')].map((node) => node.getAttribute('data-above-fold'))).toEqual(['who', 'amount', 'verdict', 'actions']);
 
+    expect(card.document.querySelector('.verdict .state')!.textContent).toBe('Waiting for your decision');
     card.button('Approve')!.click();
     await until(() => card.document.querySelector('h1')?.textContent === 'Approved', 'the approved state');
     expect(t.store.getHold(placed.hold_id)?.status).toBe('approved');
+    expect(card.document.querySelector('.say')!.textContent).toBe('Margaret can now go ahead with the $182.40 payment to Con Edison.');
+    expect(card.text().match(/Approved/g)).toHaveLength(1);
+  });
+
+  it('follows the theme the host names, and a later change of it', async () => {
+    const html = await readCard(sarah, 'ui://holdon/approval-card.html');
+    const plain = await openCard(html, sarah);
+    // No theme from the host: the stylesheet follows the system setting, and both palettes exist.
+    expect(plain.document.documentElement.dataset.theme).toBeUndefined();
+    expect(html).toContain('@media (prefers-color-scheme: dark)');
+    expect(html).toContain(':root[data-theme="dark"]');
+
+    const dark = await openCard(html, sarah, { serverTools: {} }, { theme: 'dark' });
+    expect(dark.document.documentElement.dataset.theme).toBe('dark');
+    dark.bridge.setHostContext({ theme: 'light' });
+    await until(() => dark.document.documentElement.dataset.theme === 'light', 'the theme change');
+
+    for (const uri of ['ui://holdon/hold-card.html', 'ui://holdon/receipt-card.html']) {
+      const card = await openCard(await readCard(margaret, uri), margaret, { serverTools: {} }, { theme: 'dark' });
+      expect(card.document.documentElement.dataset.theme, uri).toBe('dark');
+    }
   });
 
   it('requires the vouch tick box for a payee outside the registry, and shows the server error if it is missing', async () => {

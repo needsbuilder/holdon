@@ -352,6 +352,10 @@ describe('reasons for the trusted contact', () => {
     expect(reasons[0]!.source).toMatchObject({ publisher: 'Federal Trade Commission', url: 'https://consumer.ftc.gov/articles/avoiding-and-reporting-gift-card-scams' });
     expect(reasons[3]!.source).toMatchObject({ publisher: 'Internal Revenue Service', url: 'https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays' });
     for (const reason of reasons.filter((item) => item.kind !== 'policy')) expect(reason.source?.url, reason.text).toMatch(/^https:\/\//);
+    // A reason whose sentence already names the official website says which words those are, so a view shows the website once.
+    expect(reasons[6]!.source?.named_in_text).toBe('irs.gov');
+    expect(reasons[6]!.text).toContain('publishes on irs.gov.');
+    for (const reason of reasons.slice(0, 4)) expect(reason.source?.named_in_text, reason.text).toBeUndefined();
     // Exactly the reasons that were already recorded as blocking, no more and no fewer.
     expect(reasons.filter((reason) => reason.blocking)).toHaveLength(outcome.policy.blocked_reasons.length);
   });
@@ -361,7 +365,7 @@ describe('reasons for the trusted contact', () => {
     const held = holdFor({ description: 'National Grid left a voicemail about my balance', payee_name: 'National Grid', amount_usd: 60, payment_method: 'card', contact_channel: 'phone_call', claimed_phone: '888-555-0142' });
     const reasons = t.service.familyHoldView(held.hold, t.sarah.user_id).reasons;
     expect(reasons).toHaveLength(1);
-    expect(reasons[0]).toMatchObject({ kind: 'official_fact', blocking: false, source: { publisher: 'National Grid', url: 'https://www.nationalgridus.com/Our-Company/Scam-Alert' } });
+    expect(reasons[0]).toMatchObject({ kind: 'official_fact', blocking: false, source: { publisher: 'National Grid', url: 'https://www.nationalgridus.com/Our-Company/Scam-Alert', named_in_text: 'nationalgridus.com' } });
     expect(reasons[0]!.text).not.toContain('555');
   });
 

@@ -5,6 +5,7 @@ import {
   extractHost,
   formatUsd,
   hostMatchesDomain,
+  hostMention,
   normalizeText,
   phoneDigits,
   redactUntrusted,
@@ -38,6 +39,26 @@ describe('extractHost', () => {
     expect(hostMatchesDomain('sa.www4.irs.gov', 'irs.gov')).toBe(true);
     expect(hostMatchesDomain('irs.gov.example.com', 'irs.gov')).toBe(false);
     expect(hostMatchesDomain('notirs.gov', 'irs.gov')).toBe(false);
+  });
+});
+
+describe('hostMention', () => {
+  it("finds the source's website when the sentence already names it", () => {
+    expect(hostMention("The link that was given is not on Internal Revenue Service's official site, irs.gov.", 'https://www.irs.gov/help/tax-scams/recognize-tax-scams-and-fraud')).toBe('irs.gov');
+    expect(hostMention('one of the numbers National Grid publishes on nationalgridus.com. Caller ID can also be faked.', 'https://www.nationalgridus.com/Our-Company/Scam-Alert')).toBe('nationalgridus.com');
+  });
+
+  it('accepts the parent domain of the page, as written in the sentence', () => {
+    expect(hostMention("not on Duke Energy's official site, duke-energy.com.", 'https://news.duke-energy.com/releases/x')).toBe('duke-energy.com');
+    expect(hostMention('official site, usps.com or uspis.gov.', 'https://www.uspis.gov/news/scam-article/x')).toBe('uspis.gov');
+    expect(hostMention('See IRS.gov for details', 'https://www.irs.gov/payments')).toBe('IRS.gov');
+  });
+
+  it('finds nothing when the website is not named, or only looks alike', () => {
+    expect(hostMention('Asked to pay with gift cards or a prepaid card', 'https://consumer.ftc.gov/articles/avoiding-and-reporting-gift-card-scams')).toBeUndefined();
+    expect(hostMention('Go to irs.gov.evil.example now', 'https://www.irs.gov/payments')).toBeUndefined();
+    expect(hostMention('Visit notirs.gov today', 'https://www.irs.gov/payments')).toBeUndefined();
+    expect(hostMention('anything', 'not a url')).toBeUndefined();
   });
 });
 

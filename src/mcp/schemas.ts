@@ -59,7 +59,15 @@ const reason = z.object({
   kind: z.enum(['scam_pattern', 'official_fact', 'policy']),
   blocking: z.boolean().describe('True when this reason alone is enough to stop the request.'),
   text: z.string().describe('A pattern label from the rules file, a fact summary from the registry, a registry comparison, or a policy sentence. One reason per item.'),
-  source: z.object({ publisher: z.string(), title: z.string().optional(), url: z.string(), quote: z.string() }).optional(),
+  source: z
+    .object({
+      publisher: z.string(),
+      title: z.string().optional(),
+      url: z.string(),
+      quote: z.string(),
+      named_in_text: z.string().optional().describe("Set when `text` already names the source's website: show that mention as the link, and the website only once."),
+    })
+    .optional(),
 });
 
 const official = z

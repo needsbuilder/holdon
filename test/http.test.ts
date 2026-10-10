@@ -192,7 +192,9 @@ describe('family approval page', () => {
     expect(html).toContain('1-800-752-6633');
     expect(html).toContain('<button class="approve" type="submit" name="decision" value="approve">Approve</button>');
     expect(html).toContain('<label for="note">');
-    expect(html).toMatch(/payment is simulated/);
+    // One closing line, and it says "demonstration" once.
+    expect(html).toContain('<p class="small">Demonstration only: payments are simulated and no real money moves.</p>');
+    expect(html.match(/demonstration/gi)).toHaveLength(1);
     expect(html).not.toContain('<script');
 
     const token = new URL(url).searchParams.get('t')!;
@@ -206,15 +208,23 @@ describe('family approval page', () => {
     expect(posted.status).toBe(303);
     const done = await fetch(new URL(posted.headers.get('location')!, t.url));
     const doneHtml = await done.text();
-    expect(doneHtml).toContain('You approved this request.');
     expect(doneHtml).not.toContain('value="approve"');
-    // An already-decided request: the decision in place of the buttons.
+    // Straight after the press: the decision and what happens next, said once, in place of the buttons.
     expect(doneHtml).toContain('data-above-fold="decision"');
-    expect(doneHtml).toContain('<p role="status"><strong>Approved</strong> by Sarah Ellis.</p><p>Note: Looks right, Mom.</p>');
+    expect(doneHtml).toContain('<p role="status"><strong>Approved</strong> by Sarah Ellis. Margaret Ellis will be told.</p><p>Note: Looks right, Mom.</p>');
+    expect(doneHtml.match(/Approved/g)).toHaveLength(1);
+    expect(doneHtml).not.toContain('class="state"');
+    expect(doneHtml).not.toContain('class="card banner');
     expect(doneHtml).not.toContain('<button');
+    // The same link opened again later: an already-decided request.
+    const laterHtml = await (await fetch(url)).text();
+    expect(laterHtml).toContain('<p role="status"><strong>Approved</strong> by Sarah Ellis.</p><p>Note: Looks right, Mom.</p>');
+    expect(laterHtml).not.toContain('will be told');
 
     expect(t.service.memberHoldView(t.store.getHold(hold.id)!)).toMatchObject({ status: 'approved', next_step: 'pay', decision: { by: 'Sarah Ellis', note: 'Looks right, Mom.' } });
     expect(t.service.pay(t.margaret, { hold_id: hold.id }).receipt.payee).toBe('Con Edison');
+    // After Margaret pays, the page credits Sarah with the approval, not with the payment.
+    expect(await (await fetch(url)).text()).toContain('<p role="status"><strong>Approved</strong> by Sarah Ellis. Paid (simulated).</p>');
   });
 
   it('offers only Deny for a stopped request, shows the untrusted details as plain text, and refuses a forced approval', async () => {
@@ -224,7 +234,9 @@ describe('family approval page', () => {
     );
     const url = t.service.approvalUrl(hold.id, t.sarah.user_id);
     const html = await (await fetch(url)).text();
-    expect(html).toContain('Stopped by Hold On');
+    // A stopped request says what is true of it: nothing will be paid. It is not "waiting for a decision".
+    expect(html).toContain('<span class="tag stop">Stopped by Hold On</span><span class="state">Nothing will be paid</span>');
+    expect(html).not.toContain('Waiting for your decision');
     expect(html).toContain('<p class="cannot" data-above-fold="cannot-approve"><strong>This request cannot be approved.</strong></p>');
     // Why it was stopped: one list item per reason, each with its source where the data has one.
     const list = html.match(/<ul class="reasons"[^>]*>([\s\S]*?)<\/ul>/)![1]!;
@@ -233,13 +245,14 @@ describe('family approval page', () => {
       'Asked to pay with gift cards or a prepaid card consumer.ftc.gov',
       'Someone claiming to be from the government is demanding money consumer.ftc.gov',
       'Told to keep the payment secret consumer.ftc.gov',
-      // This request also carried a link; the registry comparison is its own item, with the official site as its source.
-      "The link that was given is not on Internal Revenue Service's official site, irs.gov. irs.gov",
+      // This request also carried a link. The comparison already names the official site, so that mention is the link, shown once.
+      "The link that was given is not on Internal Revenue Service's official site, irs.gov.",
       'The IRS never asks for or accepts gift cards for a tax bill. irs.gov',
       'Hold On never pays a government agency, utility or other official payee with gift cards.',
     ]);
     expect(items[0]).toContain('<a class="source" href="https://consumer.ftc.gov/articles/avoiding-and-reporting-gift-card-scams" target="_blank" rel="noreferrer noopener"');
-    expect(items[3]).toContain('href="https://www.irs.gov/help/tax-scams/recognize-tax-scams-and-fraud"');
+    expect(items[3]).toContain('official site, <a class="source in-text" href="https://www.irs.gov/help/tax-scams/recognize-tax-scams-and-fraud"');
+    expect(items[3]).toMatch(/>irs\.gov<\/a>\.$/);
     expect(items[4]).toContain('href="https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays"');
     expect(items[5]).not.toContain('<a');
     // The caller's own link never appears in the reasons, only in the struck-through context block.
@@ -286,6 +299,9 @@ describe('family approval page', () => {
     });
     expect(denied.status).toBe(303);
     expect(t.store.getHold(hold.id)?.status).toBe('denied');
+    const deniedHtml = await (await fetch(new URL(denied.headers.get('location')!, t.url))).text();
+    expect(deniedHtml).toContain('<p role="status"><strong>Denied</strong> by Sarah Ellis. Nothing will be paid, and Margaret Ellis will be told.</p>');
+    expect(deniedHtml.match(/Denied/g)).toHaveLength(1);
   });
 
   it('asks the contact to vouch for a payee that is not in the registry', async () => {

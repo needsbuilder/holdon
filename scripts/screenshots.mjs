@@ -7,9 +7,11 @@
 //
 //   npm run screenshots                       standalone approval page only
 //   npm run screenshots -- --stage http://localhost:4700
-//                                             also the MCP Apps card inside a
-//                                             Voicestage phone frame, including
-//                                             a real click on Approve
+//                                             also the MCP Apps cards inside a
+//                                             Voicestage phone frame and kitchen
+//                                             display, light and dark, including
+//                                             real clicks on Approve and Deny
+//   npm run screenshots -- --stage <url> --only page   (or --only stage)
 //
 // Needs a running Hold On server with the demo circle (npm run seed:reset &&
 // npm start) and Chrome (pass --chrome <path> or set CHROME_PATH). The stage
@@ -28,6 +30,7 @@ const { values } = parseArgs({
   options: {
     holdon: { type: 'string', default: process.env.HOLDON_URL ?? 'http://localhost:8787' },
     stage: { type: 'string' },
+    only: { type: 'string' },
     out: { type: 'string', default: join(root, 'docs', 'screenshots') },
     chrome: { type: 'string' },
   },
@@ -48,6 +51,19 @@ const SCENARIOS = {
   roofer: {
     check: { description: 'The roofer, Greenleaf Roofing, wants a $1,500 deposit by check before he starts on the gutters next week.', payee_name: 'Greenleaf Roofing', amount_usd: 1500, payment_method: 'check', contact_channel: 'in_person' },
     summary: 'Greenleaf Roofing asked for a $1,500 deposit by check before starting on the gutters next week.',
+  },
+  irsWithLink: {
+    check: {
+      description: "A man who said he was from the IRS just called. He says I'll be arrested unless I pay $2,000 in gift cards today, and he told me not to tell anyone. He gave me a website to pay on.",
+      payee_name: 'IRS',
+      amount_usd: 2000,
+      payment_method: 'gift_card',
+      contact_channel: 'phone_call',
+      secrecy_requested: true,
+      claimed_url: 'http://irs-settlement-desk.com/pay',
+      urgency_claims: ['arrest_or_legal_threat', 'pay_immediately'],
+    },
+    summary: 'Someone claiming to be the IRS phoned, demanded $2,000 in gift cards today, and gave a website to pay on.',
   },
   irs: {
     check: {
@@ -160,6 +176,18 @@ async function standalone(browser, member, contact) {
   await page.goto(blocked.approval_url, { waitUntil: 'load' });
   judge('page, blocked', await page.evaluate(measureFold), ['who', 'amount', 'verdict', 'cannot-approve', 'reasons', 'actions']);
   await save(page, 'page-blocked-390x844.png');
+  await colorScheme(page, 'dark');
+  await page.goto(blocked.approval_url, { waitUntil: 'load' });
+  judge('page, blocked, dark', await page.evaluate(measureFold), ['who', 'amount', 'verdict', 'cannot-approve', 'reasons', 'actions']);
+  await save(page, 'page-blocked-dark-390x844.png');
+  await colorScheme(page, 'light');
+
+  // The same request when the caller also gave a link: one more reason, whose sentence already names the official website.
+  await clearPending(contact);
+  const withLink = await placeHold(member, contact, SCENARIOS.irsWithLink);
+  await page.goto(withLink.approval_url, { waitUntil: 'load' });
+  judge('page, blocked, with a link from the caller', await page.evaluate(measureFold), ['who', 'amount', 'verdict', 'cannot-approve', 'reasons', 'actions']);
+  await save(page, 'page-blocked-with-link-390x844.png');
 
   await clearPending(contact);
   await contact.callTool({ name: 'holdon_update_policy', arguments: { remove_trusted_payee: 'Greenleaf Roofing' } });
@@ -173,6 +201,12 @@ async function standalone(browser, member, contact) {
   await page.goto(bill.approval_url, { waitUntil: 'load' });
   judge('page, approvable', await page.evaluate(measureFold), ['who', 'amount', 'verdict', 'actions']);
   await save(page, 'page-approvable-390x844.png');
+  await colorScheme(page, 'dark');
+  await page.goto(bill.approval_url, { waitUntil: 'load' });
+  judge('page, approvable, dark', await page.evaluate(measureFold), ['who', 'amount', 'verdict', 'actions']);
+  await save(page, 'page-approvable-dark-390x844.png');
+  await colorScheme(page, 'light');
+  await page.goto(bill.approval_url, { waitUntil: 'load' });
 
   // Decide it the way a person would: open the message box, type, press Approve.
   await page.click('details.note summary');
@@ -187,6 +221,11 @@ async function standalone(browser, member, contact) {
   judge('page, decided', await page.evaluate(measureFold), ['who', 'amount', 'verdict', 'decision']);
   await save(page, 'page-decided-390x844.png');
   await page.close();
+
+  // Margaret pays the approved bill; the receipt is the next card to look at.
+  const receipt = await member.callTool({ name: 'holdon_pay', arguments: { hold_id: bill.hold_id } });
+  if (receipt.isError) throw new Error(`holdon_pay: ${receipt.content?.[0]?.text}`);
+  await receiptAlone(browser, member, { content: receipt.content, structuredContent: receipt.structuredContent });
 }
 
 // --- the MCP Apps card inside Voicestage's phone frame ------------------------------
@@ -212,6 +251,8 @@ async function stageUntil(what, test, timeoutMs = 60_000) {
 /** Play the first steps of a Voicestage scenario, one at a time, until the phone shows the approval card. */
 async function playUntilPhoneShowsCard(scenarioId, steps = 2) {
   await stagePost('/api/scenarios/stop').catch(() => undefined);
+  // Anything said because of earlier holds (for example the ones just cleared) should be over first.
+  await stageQuiet();
   await stagePost('/api/reset');
   await sleep(300);
   await stagePost(`/api/scenarios/${scenarioId}/play`, { mode: 'scripted', pacing: 'step' });
@@ -221,18 +262,38 @@ async function playUntilPhoneShowsCard(scenarioId, steps = 2) {
     await stageUntil(`step ${index + 1} to finish`, (snapshot) => ['passed', 'failed'].includes(snapshot.run?.steps[index]?.status));
   }
   await stageUntil('the approval card on the phone', (snapshot) => snapshot.devices.find((device) => device.id === 'phone')?.screen?.card?.uri === 'ui://holdon/approval-card.html');
+  await stageQuiet();
 }
 
-/** Open the stage and return the card's frame inside the phone. */
-async function openStage(page, viewport) {
+/** Ask the browser for a light or dark page, as a system set to that scheme would. */
+async function colorScheme(page, value) {
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value }]);
+}
+
+/** Open the stage and return the card's frame inside a device: the phone, or the kitchen display. */
+async function openStage(page, viewport, device = 'phone') {
   await page.setViewport(viewport);
-  await page.goto(`${stageUrl}/?voice=0&inspector=0`, { waitUntil: 'domcontentloaded' });
-  const iframe = await page.waitForSelector('.device--phone .app-card--ready iframe', { timeout: 20_000 });
-  await page.$eval('.device--phone', (node) => node.scrollIntoView({ block: 'start' }));
-  await sleep(1500);
-  const frame = await iframe.contentFrame();
-  await frame.waitForSelector('#root section');
-  return frame;
+  const selector = `.device--${device} .app-card--ready iframe`;
+  // The stage redraws a card when a new result arrives, which replaces its iframe; look again after it settles.
+  for (let attempt = 1; ; attempt += 1) {
+    await page.goto(`${stageUrl}/?voice=0&inspector=0`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector(selector, { timeout: 20_000 });
+    await page.$eval(`.device--${device}`, (node) => node.scrollIntoView({ block: 'start' }));
+    await sleep(1500);
+    const frame = await (await page.$(selector))?.contentFrame();
+    const drawn = frame && (await frame.waitForSelector('#root section', { timeout: 5000 }).catch(() => null));
+    if (drawn) return frame;
+    if (attempt === 3) throw new Error(`The card on the ${device} did not settle.`);
+  }
+}
+
+/** Wait until no device on the stage is thinking or speaking, so nothing is about to change on screen. */
+async function stageQuiet() {
+  let calm = 0;
+  await stageUntil('the stage to go quiet', (snapshot) => {
+    calm = snapshot.devices.every((device) => device.status === 'idle') ? calm + 1 : 0;
+    return calm >= 5;
+  });
 }
 
 /**
@@ -256,7 +317,7 @@ async function clickInCard(page, frame, selector) {
   return point;
 }
 
-async function shootStage(page, name, file, expected) {
+async function shootStage(page, name, file, expected, { dark = false } = {}) {
   const narrow = await openStage(page, PHONE);
   judge(`stage 390x844, ${name}`, await narrow.evaluate(measureFold), expected);
   await save(page, `stage-${file}-390x844.png`);
@@ -264,6 +325,93 @@ async function shootStage(page, name, file, expected) {
   const wide = await openStage(page, DESKTOP);
   judge(`stage 1920x1080, ${name}`, await wide.evaluate(measureFold), expected);
   await save(await page.$('.device--phone .frame'), `stage-phone-${file}-1920x1080.png`);
+  if (!dark) return;
+  // The same card when the system, and so the host, asks for dark.
+  await colorScheme(page, 'dark');
+  const night = await openStage(page, DESKTOP);
+  judge(`stage 1920x1080 dark, ${name}`, await night.evaluate(measureFold), expected);
+  await save(await page.$('.device--phone .frame'), `stage-phone-${file}-dark-1920x1080.png`);
+  await colorScheme(page, 'light');
+}
+
+/** The card on the kitchen display, light and dark, cut out of the 1920x1080 stage. */
+async function shootKitchen(page, name, file, expected) {
+  for (const scheme of ['light', 'dark']) {
+    await colorScheme(page, scheme);
+    const frame = await openStage(page, DESKTOP, 'display');
+    const label = scheme === 'dark' ? `${name}, dark` : name;
+    if (expected) judge(`kitchen display 1920x1080, ${label}`, await frame.evaluate(measureFold), expected);
+    await save(await page.$('.device--display .frame'), `stage-kitchen-${file}${scheme === 'dark' ? '-dark' : ''}-1920x1080.png`);
+  }
+  await colorScheme(page, 'light');
+}
+
+// --- one card on its own, in a stand-in host --------------------------------------
+
+/**
+ * A page that hosts one card in a sandboxed iframe and speaks just enough of
+ * the MCP Apps protocol to show it: it answers ui/initialize, then sends the
+ * tool result. Used to look at a card at a given size and theme without a
+ * stage. The tests use the official AppBridge; this is only a picture frame.
+ */
+function standInHost(cardHtml, result, hostContext) {
+  const data = JSON.stringify({ card: cardHtml, result, hostContext }).replace(/</g, '\\u003c');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>html, body { margin: 0; height: 100%; } iframe { display: block; width: 100%; height: 100%; border: 0; }</style></head>
+<body><iframe sandbox="allow-scripts" title="card"></iframe><script>
+const data = ${data};
+const frame = document.querySelector('iframe');
+window.addEventListener('message', (event) => {
+  if (event.source !== frame.contentWindow) return;
+  const message = event.data;
+  if (!message || message.jsonrpc !== '2.0') return;
+  const reply = (body) => frame.contentWindow.postMessage({ jsonrpc: '2.0', ...body }, '*');
+  if (message.method === 'ui/initialize') reply({ id: message.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: 'screenshot-host', version: '1.0.0' }, hostCapabilities: {}, hostContext: data.hostContext } });
+  else if (message.method === 'ui/notifications/initialized') reply({ method: 'ui/notifications/tool-result', params: data.result });
+  else if (message.id !== undefined) reply({ id: message.id, error: { code: -32601, message: 'Not available in the screenshot host' } });
+});
+frame.srcdoc = data.card;
+</script></body></html>`;
+}
+
+async function showAlone(page, cardHtml, result, { scheme = 'light', theme } = {}) {
+  await colorScheme(page, scheme);
+  // A fresh document each time, so the frame found is this card and not the one before it.
+  await page.goto('about:blank');
+  await page.setContent(standInHost(cardHtml, result, theme ? { theme } : {}), { waitUntil: 'load' });
+  const frame = await (await page.waitForSelector('iframe')).contentFrame();
+  await frame.waitForSelector('#root section');
+  await sleep(300);
+  const colors = await frame.evaluate(() => ({ page: getComputedStyle(document.body).backgroundColor, text: getComputedStyle(document.querySelector('h1')).color, theme: document.documentElement.dataset.theme ?? 'none' }));
+  return { frame, colors };
+}
+
+/** The receipt card by itself at phone size, in both schemes, and with a host that names a theme the system does not. */
+async function receiptAlone(browser, member, receiptResult) {
+  console.log('\nReceipt card on its own, 390x844 (stand-in host)');
+  const page = await browser.newPage();
+  await page.setViewport(PHONE);
+  const card = (await member.readResource({ uri: 'ui://holdon/receipt-card.html' })).contents[0].text;
+  const expected = ['paid', 'payee', 'simulated', 'details'];
+
+  const light = await showAlone(page, card, receiptResult);
+  judge('receipt card 390x844', await light.frame.evaluate(measureFold), expected);
+  await save(page, 'receipt-card-390x844.png');
+  const dark = await showAlone(page, card, receiptResult, { scheme: 'dark' });
+  judge('receipt card 390x844, dark', await dark.frame.evaluate(measureFold), expected);
+  await save(page, 'receipt-card-dark-390x844.png');
+
+  // The host's word wins over the system's, in both directions.
+  const hostDark = await showAlone(page, card, receiptResult, { scheme: 'light', theme: 'dark' });
+  const hostLight = await showAlone(page, card, receiptResult, { scheme: 'dark', theme: 'light' });
+  console.log(`  system light: page ${light.colors.page}, text ${light.colors.text}`);
+  console.log(`  system dark:  page ${dark.colors.page}, text ${dark.colors.text}`);
+  console.log(`  system light, host says dark:  page ${hostDark.colors.page}, text ${hostDark.colors.text} (data-theme ${hostDark.colors.theme})`);
+  console.log(`  system dark,  host says light: page ${hostLight.colors.page}, text ${hostLight.colors.text} (data-theme ${hostLight.colors.theme})`);
+  if (dark.colors.page === light.colors.page) problems.push('receipt card: the dark scheme did not change the page colour');
+  if (hostDark.colors.page !== dark.colors.page) problems.push('receipt card: a host that names the dark theme did not get it');
+  if (hostLight.colors.page !== light.colors.page) problems.push('receipt card: a host that names the light theme did not get it');
+  await page.close();
 }
 
 /** A press on a reason's source link asks the host to open it (MCP Apps ui/open-link); the card stays put. */
@@ -319,7 +467,7 @@ async function stage(browser, member, contact) {
   // A stopped request.
   await clearPending(contact);
   await playUntilPhoneShowsCard('a-irs-gift-cards');
-  await shootStage(page, 'blocked', 'blocked', ['who', 'amount', 'verdict', 'cannot-approve', 'reasons', 'actions']);
+  await shootStage(page, 'blocked', 'blocked', ['who', 'amount', 'verdict', 'cannot-approve', 'reasons', 'actions'], { dark: true });
   await stagePost('/api/scenarios/stop').catch(() => undefined);
   await pressSourceLink(page);
   await pressDeny(page, member);
@@ -333,7 +481,7 @@ async function stage(browser, member, contact) {
   // A request that can be approved.
   await clearPending(contact);
   await playUntilPhoneShowsCard('b-utility-bill');
-  await shootStage(page, 'approvable', 'approvable', ['who', 'amount', 'verdict', 'actions']);
+  await shootStage(page, 'approvable', 'approvable', ['who', 'amount', 'verdict', 'actions'], { dark: true });
 
   // A real click on Approve in the embedded card, on the phone-sized stage.
   const frame = await openStage(page, PHONE);
@@ -368,6 +516,12 @@ async function stage(browser, member, contact) {
   // An already-decided hold: Sarah opens her inbox with everything in it.
   await stagePost('/api/devices/phone/tool', { server: 'holdon', name: 'holdon_family_inbox', arguments: { status: 'all', limit: 1 }, origin: 'inspector' });
   await shootStage(page, 'decided', 'decided', ['who', 'amount', 'verdict', 'decision']);
+
+  // Margaret's side, on the kitchen display: the approved hold, then the receipt once she pays.
+  await shootKitchen(page, 'hold card', 'hold');
+  await stagePost('/api/devices/kitchen/tool', { server: 'holdon', name: 'holdon_pay', arguments: { hold_id: holdId }, origin: 'inspector' });
+  await stageUntil('the receipt on the kitchen display', (current) => current.devices.find((device) => device.id === 'kitchen')?.screen?.card?.uri === 'ui://holdon/receipt-card.html');
+  await shootKitchen(page, 'receipt card', 'receipt', ['paid', 'payee', 'simulated', 'details']);
   await page.close();
 }
 
@@ -381,8 +535,8 @@ async function main() {
   const contact = await connect(process.env.HOLDON_CONTACT_TOKEN ?? 'demo-contact-sarah');
   const browser = await puppeteer.launch({ executablePath, headless: true, args: ['--hide-scrollbars', '--mute-audio'] });
   try {
-    if (stageUrl) await stage(browser, member, contact);
-    await standalone(browser, member, contact);
+    if (stageUrl && values.only !== 'page') await stage(browser, member, contact);
+    if (values.only !== 'stage') await standalone(browser, member, contact);
   } finally {
     await browser.close();
     await Promise.allSettled([member.close(), contact.close()]);

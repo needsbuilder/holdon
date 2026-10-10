@@ -357,9 +357,9 @@ export function createHoldOnApp(options: AppOptions): HoldOnApp {
     if (!principal || !token) return invalidLink(res);
     try {
       const hold = service.familyHold(principal, holdId);
-      const done = typeof req.query.done === 'string' ? req.query.done : undefined;
-      const notice = done === 'approved' ? 'You approved this request. Your family member will be told.' : done === 'denied' ? 'You denied this request. Nothing will be paid, and your family member will be told.' : undefined;
-      res.type('html').send(renderApprovalPage(service.familyHoldView(hold, principal.user_id), { token, notice }));
+      // `done` is set by the redirect after a button press; the page then also says what happens next.
+      const justDecided = req.query.done === 'approved' || req.query.done === 'denied';
+      res.type('html').send(renderApprovalPage(service.familyHoldView(hold, principal.user_id), { token, justDecided }));
     } catch (error) {
       if (error instanceof HoldOnError) {
         res.status(404).type('html').send(renderMessagePage('Request not found', error.message, 'caution'));

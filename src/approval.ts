@@ -13,7 +13,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { SIMULATED_NOTE } from './domain/language.js';
+import { SIMULATED_FOOTER } from './domain/language.js';
 import { channelName, extractHost, formatUsd, methodName } from './domain/text.js';
 import type { HoldReason } from './domain/types.js';
 import { packagePath } from './paths.js';
@@ -83,7 +83,7 @@ ${style()}
 <body>
 <main>
 ${body}
-<p class="small">Hold On is a hackathon demonstration. ${escapeHtml(SIMULATED_NOTE)}</p>
+<p class="small">${escapeHtml(SIMULATED_FOOTER)}</p>
 </main>
 </body>
 </html>`;
@@ -117,20 +117,52 @@ const VERDICTS: Record<string, [label: string, tone: string]> = {
  * A link to an official source, labelled with its website. The URL comes from
  * the rules or registry file; only https pages are linked.
  */
-function sourceLink(source: { url: string; publisher?: string; title?: string } | undefined): string {
-  const site = source ? extractHost(source.url) : undefined;
+function sourceLink(source: { url: string; publisher?: string; title?: string } | undefined, mention?: string): string {
+  const site = mention ?? (source ? extractHost(source.url) : undefined);
   if (!source || !site) return '';
   const name = [source.publisher, source.title].filter(Boolean).join(', ');
-  if (!/^https:\/\//.test(source.url)) return `<span class="source">${escapeHtml(site)}</span>`;
-  return `<a class="source" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer noopener" title="${escapeHtml(name)}" aria-label="Source: ${escapeHtml(name || site)}">${escapeHtml(site)}</a>`;
+  // A website already named in the sentence keeps the sentence's own type size.
+  const style = mention ? 'source in-text' : 'source';
+  if (!/^https:\/\//.test(source.url)) return `<span class="${style}">${escapeHtml(site)}</span>`;
+  return `<a class="${style}" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer noopener" title="${escapeHtml(name)}" aria-label="Source: ${escapeHtml(name || site)}">${escapeHtml(site)}</a>`;
+}
+
+/**
+ * One reason: its text as given, and its source. When the text already names
+ * the source's website ("...official site, irs.gov."), that mention becomes the
+ * link; otherwise the website follows the text. Either way it is shown once.
+ */
+function reasonItem(reason: HoldReason): string {
+  const mention = reason.source?.named_in_text;
+  const at = mention ? reason.text.indexOf(mention) : -1;
+  if (mention && at >= 0) {
+    return `<li>${escapeHtml(reason.text.slice(0, at))}${sourceLink(reason.source, mention)}${escapeHtml(reason.text.slice(at + mention.length))}</li>`;
+  }
+  return `<li>${escapeHtml(reason.text)}${reason.source ? ` ${sourceLink(reason.source)}` : ''}</li>`;
 }
 
 /** One reason per item, each with its source where the data has one. */
 function reasonList(reasons: HoldReason[]): string {
-  return `<ul class="reasons" data-above-fold="reasons">${reasons.map((reason) => `<li>${escapeHtml(reason.text)}${reason.source ? ` ${sourceLink(reason.source)}` : ''}</li>`).join('')}</ul>`;
+  return `<ul class="reasons" data-above-fold="reasons">${reasons.map(reasonItem).join('')}</ul>`;
 }
 
-export function renderApprovalPage(view: FamilyHoldView, options: { token: string; notice?: string; error?: string }): string {
+/**
+ * What became of a request that is no longer open, said once. Only the trusted
+ * contact approves or denies; paying, cancelling and running out of time are
+ * things that happened afterwards and are not theirs.
+ */
+function decisionLine(view: FamilyHoldView): string {
+  const by = view.decision ? ` by ${escapeHtml(view.decision.by)}` : '';
+  if (view.status === 'denied') return `<strong>Denied</strong>${by}.`;
+  if (view.status === 'approved') return `<strong>Approved</strong>${by}.`;
+  const approved = view.decision ? `<strong>Approved</strong>${by}. ` : '';
+  if (view.status === 'paid') return `${approved}Paid (simulated).`;
+  if (view.status === 'expired') return view.decision ? `${approved}Expired before it was paid.` : 'Expired without a decision.';
+  if (view.status === 'cancelled') return `${approved}Cancelled by your family member.`;
+  return `${escapeHtml(STATUS_TEXT[view.status] ?? view.status)}.`;
+}
+
+export function renderApprovalPage(view: FamilyHoldView, options: { token: string; justDecided?: boolean; error?: string }): string {
   const [verdictLabel, verdictTone] = VERDICTS[view.verdict] ?? ['Request', 'neutral'];
   const tone = view.blocked ? 'stop' : verdictTone;
   const member = escapeHtml(view.member.name);
@@ -139,6 +171,10 @@ export function renderApprovalPage(view: FamilyHoldView, options: { token: strin
   const meta = [methodName(view.payment_method), channelName(view.contact_channel), view.secrecy_requested ? 'Told to keep it secret' : undefined].filter(Boolean).join(' · ');
   // A stopped request leads with what stops it; anything else shows every warning sign.
   const listed = view.blocked ? view.reasons.filter((reason) => reason.blocking) : view.reasons;
+  // What is true right now, next to the verdict. A stopped request is not "waiting for a
+  // decision": nothing will be paid whatever is pressed. A request that is no longer open
+  // says nothing here; the decision box below says it once.
+  const state = !open ? undefined : view.blocked ? 'Nothing will be paid' : STATUS_TEXT.pending_family;
 
   let why: string;
   if (view.blocked) {
@@ -153,7 +189,7 @@ export function renderApprovalPage(view: FamilyHoldView, options: { token: strin
 <h1 id="who" data-above-fold="who">${member} asked to make a payment</h1>
 <p class="amount" data-above-fold="amount">${escapeHtml(amount)}<span class="to"> to </span>${view.payee_name ? escapeHtml(view.payee_name) : 'no payee named'}</p>
 <p class="meta">${escapeHtml(meta)}</p>
-<p class="verdict" data-above-fold="verdict"><span class="tag ${tone}">${escapeHtml(verdictLabel)}</span><span class="state">${escapeHtml(STATUS_TEXT[view.status] ?? view.status)}</span></p>
+<p class="verdict" data-above-fold="verdict"><span class="tag ${tone}">${escapeHtml(verdictLabel)}</span>${state ? `<span class="state">${escapeHtml(state)}</span>` : ''}</p>
 ${why}
 </section>`;
 
@@ -173,9 +209,10 @@ ${trust}
 <div class="actions${view.can_approve ? '' : ' single'}">${approve}<button class="deny" type="submit" name="decision" value="deny">Deny</button></div>
 </form>`;
   } else {
-    const by = view.decision ? ` by ${escapeHtml(view.decision.by)}` : '';
     const note = view.decision?.note ? `<p>Note: ${escapeHtml(view.decision.note)}</p>` : '';
-    decision = `<section class="card decided" aria-labelledby="decision-h" data-above-fold="decision"><h2 id="decision-h">Decision</h2><p role="status"><strong>${escapeHtml(STATUS_TEXT[view.status] ?? view.status)}</strong>${by}.</p>${note}</section>`;
+    // Straight after pressing a button: what happens next, in the same sentence rather than in a second banner.
+    const next = !options.justDecided ? '' : view.status === 'approved' ? ` ${member} will be told.` : view.status === 'denied' ? ` Nothing will be paid, and ${member} will be told.` : '';
+    decision = `<section class="card decided" aria-labelledby="decision-h" data-above-fold="decision"><h2 id="decision-h">Decision</h2><p role="status">${decisionLine(view)}${next}</p>${note}</section>`;
   }
 
   // --- under "Details": nothing here has to be read before deciding ------------
@@ -225,7 +262,6 @@ ${untrustedBlock}
 </details>`;
 
   const body = `
-${options.notice ? `<div class="card banner good" role="status"><p>${escapeHtml(options.notice)}</p></div>` : ''}
 ${options.error ? `<div class="card banner stop" role="alert"><p>${escapeHtml(options.error)}</p></div>` : ''}
 ${summary}
 ${decision}

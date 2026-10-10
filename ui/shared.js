@@ -20,6 +20,16 @@ const APPS_PROTOCOL_VERSION = '2026-01-26';
 const REQUEST_TIMEOUT_MS = 30000;
 
 /**
+ * Light or dark, as the host says (MCP Apps `hostContext.theme`). Until a host
+ * says so, the stylesheet follows the system setting (prefers-color-scheme).
+ * Both palettes are in ui/card.css and both are meant to be read.
+ */
+function applyTheme(context) {
+  const theme = context?.theme;
+  if (theme === 'dark' || theme === 'light') document.documentElement.dataset.theme = theme;
+}
+
+/**
  * Minimal MCP Apps view: handshake, tool results from the host, and tool calls
  * through the host. Messages are only accepted from the embedding window.
  */
@@ -57,6 +67,7 @@ export async function connectHost({ name, version, onToolResult }) {
     }
     if (message.id === undefined) {
       if (message.method === 'ui/notifications/tool-result') onToolResult(message.params);
+      else if (message.method === 'ui/notifications/host-context-changed') applyTheme(message.params);
       return;
     }
     // Requests from the host: agree to be torn down, answer pings, decline anything else.
@@ -69,6 +80,7 @@ export async function connectHost({ name, version, onToolResult }) {
     appCapabilities: {},
     protocolVersion: APPS_PROTOCOL_VERSION,
   });
+  applyTheme(initialized?.hostContext);
   notify('ui/notifications/initialized', {});
 
   // Let the host size the iframe to the card.
@@ -139,7 +151,8 @@ export const channelName = (channel) => CHANNELS[channel];
 export function when(iso) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return undefined;
-  return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  // Keep "8:07 AM" together when a narrow card has to wrap the line.
+  return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }).replace(/\s(AM|PM)$/, '\u00a0$1');
 }
 
 /** "consumer.ftc.gov" for "https://consumer.ftc.gov/articles/...": a short, honest label for a source link. */
@@ -155,16 +168,21 @@ export function hostOf(url) {
  * A link to an official source, labelled with its website. Only https pages
  * are linked, and only when the host can open links; otherwise the website is
  * shown as plain text. The card itself never navigates.
+ *
+ * `mention` is the website as the sentence already names it; the link is then
+ * drawn on those words, so the website is shown once.
  */
-export function sourceLink(source, api) {
-  const site = source?.url ? hostOf(source.url) : undefined;
+export function sourceLink(source, api, mention) {
+  const site = mention ?? (source?.url ? hostOf(source.url) : undefined);
   if (!site) return undefined;
   const name = [source.publisher, source.title].filter(Boolean).join(', ');
-  if (!api.canOpenLinks || !/^https:\/\//.test(source.url)) return el('span', { class: 'source', title: name }, site);
+  // A website already named in the sentence keeps the sentence's own type size.
+  const style = mention ? 'source in-text' : 'source';
+  if (!api.canOpenLinks || !/^https:\/\//.test(source.url)) return el('span', { class: style, title: name }, site);
   return el(
     'a',
     {
-      class: 'source',
+      class: style,
       href: source.url,
       rel: 'noreferrer noopener',
       title: name,
@@ -179,11 +197,12 @@ export function sourceLink(source, api) {
 }
 
 /** A two-column list of facts; rows without a value are left out. */
+/** Rows are [term, value] or [term, value, className]; `code` marks a long identifier. */
 export function facts(rows) {
   const list = el('dl', { class: 'facts' });
-  for (const [term, value] of rows) {
+  for (const [term, value, className] of rows) {
     if (value === undefined || value === null || value === '') continue;
-    list.append(el('dt', {}, term), el('dd', {}, value));
+    list.append(el('dt', {}, term), el('dd', className ? { class: className } : {}, value));
   }
   return list;
 }

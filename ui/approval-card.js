@@ -31,13 +31,36 @@ function reasonsOf(hold) {
   return (hold.risk_signals ?? []).map((signal) => ({ kind: 'scam_pattern', blocking: signal.severity === 'high', text: signal.label, source: signal.source }));
 }
 
+/**
+ * One reason: its text as given, and its source. When the text already names
+ * the source's website ("...official site, irs.gov."), that mention becomes the
+ * link; otherwise the website follows the text. Either way it is shown once.
+ */
+function reasonItem(reason, api) {
+  const mention = reason.source?.named_in_text;
+  const at = mention ? reason.text.indexOf(mention) : -1;
+  if (at >= 0) return el('li', {}, reason.text.slice(0, at), sourceLink(reason.source, api, mention), reason.text.slice(at + mention.length));
+  return el('li', {}, reason.text, reason.source ? ' ' : undefined, sourceLink(reason.source, api));
+}
+
 /** One reason per item, each with its source where the data has one. */
 function reasonList(reasons, api) {
   return el(
     'ul',
     { class: 'reasons', 'data-above-fold': 'reasons' },
-    reasons.map((reason) => el('li', {}, reason.text, reason.source ? ' ' : undefined, sourceLink(reason.source, api))),
+    reasons.map((reason) => reasonItem(reason, api)),
   );
+}
+
+/**
+ * What is true of the request right now, in a few words, next to the verdict.
+ * A stopped request is not "waiting for a decision": nothing will be paid
+ * whatever is pressed. A request that is no longer open says nothing here; the
+ * decision box below says it once.
+ */
+function stateOf(hold) {
+  if (hold.status !== 'pending_family') return undefined;
+  return hold.blocked ? 'Nothing will be paid' : STATUS.pending_family;
 }
 
 function summary(hold, api) {
@@ -55,7 +78,7 @@ function summary(hold, api) {
     el('h1', { id: 'who', 'data-above-fold': 'who' }, `${hold.member.name} asked to make a payment`),
     el('p', { class: 'amount', 'data-above-fold': 'amount' }, usd(hold.amount_usd) ?? 'No amount given', el('span', { class: 'to' }, ' to '), hold.payee_name ?? 'no payee named'),
     el('p', { class: 'meta' }, meta),
-    el('p', { class: 'verdict', 'data-above-fold': 'verdict' }, el('span', { class: `tag ${hold.blocked ? 'stop' : tone}` }, verdictLabel), el('span', { class: 'state' }, STATUS[hold.status] ?? hold.status)),
+    el('p', { class: 'verdict', 'data-above-fold': 'verdict' }, el('span', { class: `tag ${hold.blocked ? 'stop' : tone}` }, verdictLabel), stateOf(hold) ? el('span', { class: 'state' }, stateOf(hold)) : undefined),
   );
 
   if (hold.blocked) {
@@ -199,6 +222,22 @@ function details(hold, api) {
   return more;
 }
 
+/**
+ * What became of a request that is no longer open, said once. Only the trusted
+ * contact approves or denies; paying, cancelling and running out of time are
+ * things that happened afterwards and are not theirs.
+ */
+function decisionLine(hold) {
+  const by = hold.decision ? ` by ${hold.decision.by}` : '';
+  if (hold.status === 'denied') return `Denied${by}.`;
+  if (hold.status === 'approved') return `Approved${by}.`;
+  const approved = hold.decision ? `Approved${by}. ` : '';
+  if (hold.status === 'paid') return `${approved}Paid (simulated).`;
+  if (hold.status === 'expired') return hold.decision ? `${approved}Expired before it was paid.` : 'Expired without a decision.';
+  if (hold.status === 'cancelled') return `${approved}Cancelled by your family member.`;
+  return `${STATUS[hold.status] ?? hold.status}.`;
+}
+
 function renderHold(root, hold, api) {
   root.append(summary(hold, api));
   if (hold.status === 'pending_family') {
@@ -209,7 +248,7 @@ function renderHold(root, hold, api) {
         'section',
         { class: 'card decided', 'data-above-fold': 'decision' },
         el('h2', {}, 'Decision'),
-        el('p', { role: 'status' }, hold.decision ? `${STATUS[hold.status] ?? hold.status} by ${hold.decision.by}.` : `${STATUS[hold.status] ?? hold.status}.`),
+        el('p', { role: 'status' }, decisionLine(hold)),
         hold.decision?.note ? el('p', {}, `Note: ${hold.decision.note}`) : undefined,
       ),
     );
@@ -221,13 +260,17 @@ function render(root, data, api) {
   // After a decision: the result of holdon_family_decide.
   if (data.decision && data.status && !data.member) {
     const approved = data.status === 'approved';
+    const headline = approved ? 'Approved' : 'Denied';
+    // The server's sentence opens with the same word for the voice; the card says it once, as the headline.
+    const said = data.say_to_user ?? '';
+    const rest = said.startsWith(`${headline}. `) ? said.slice(headline.length + 2) : said;
     root.append(
       el(
         'section',
         { class: `card summary result ${approved ? 'good' : 'stop'}`, 'data-above-fold': 'decision' },
         el('p', { class: 'eyebrow' }, 'Hold On · simulated payments'),
-        el('h1', {}, approved ? 'Approved' : 'Denied'),
-        el('p', { class: 'say', role: 'status' }, data.say_to_user ?? ''),
+        el('h1', {}, headline),
+        el('p', { class: 'say', role: 'status' }, rest),
         facts([
           ['Decided by', data.decision.by],
           ['Your note', data.decision.note],

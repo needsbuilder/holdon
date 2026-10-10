@@ -113,8 +113,12 @@ export interface HoldReason {
   /** True when this reason alone is enough to stop the request. */
   blocking: boolean;
   text: string;
-  /** The official page behind the reason, when the data has one. Policy reasons have none. */
-  source?: { publisher: string; title?: string; url: string; quote: string };
+  /**
+   * The official page behind the reason, when the data has one. Policy reasons have none.
+   * `named_in_text` is set when `text` already names the source's website (for
+   * example "irs.gov"): show that mention as the link, and the website only once.
+   */
+  source?: { publisher: string; title?: string; url: string; quote: string; named_in_text?: string };
 }
 
 export interface OfficialPhone {

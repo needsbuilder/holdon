@@ -6,8 +6,12 @@
  * `compact` class and are laid out for a phone: the summary and the buttons fit
  * on the first screen, and the rest sits under "Details".
  */
-:root { color-scheme: light dark; --ink: #111827; --paper: #ffffff; --edge: #1f2937; --muted: #374151; --wash: #f3f4f6; --link: #1d4ed8; }
-@media (prefers-color-scheme: dark) { :root { --ink: #f9fafb; --paper: #111827; --edge: #e5e7eb; --muted: #d1d5db; --wash: #030712; --link: #93c5fd; } }
+/* Light and dark are both supported. The system setting decides, unless the
+   host names a theme (MCP Apps hostContext.theme, set as data-theme by ui/shared.js). */
+:root { color-scheme: light dark; --ink: #111827; --paper: #ffffff; --edge: #1f2937; --muted: #374151; --wash: #f3f4f6; --link: #1d4ed8; --alert: #b91c1c; --chip: #1f2937; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ink: #f9fafb; --paper: #111827; --edge: #e5e7eb; --muted: #d1d5db; --wash: #030712; --link: #93c5fd; --alert: #fca5a5; --chip: #374151; } }
+:root[data-theme="dark"] { color-scheme: dark; --ink: #f9fafb; --paper: #111827; --edge: #e5e7eb; --muted: #d1d5db; --wash: #030712; --link: #93c5fd; --alert: #fca5a5; --chip: #374151; }
+:root[data-theme="light"] { color-scheme: light; }
 * { box-sizing: border-box; }
 html { font-size: 112.5%; }
 body { margin: 0; padding: 0.75rem; font: 1rem/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--wash); }
@@ -21,11 +25,13 @@ p { margin: 0 0 0.7rem; }
 .small { font-size: 0.9rem; color: var(--muted); }
 .card { background: var(--paper); border: 2px solid var(--edge); border-left-width: 0.7rem; border-radius: 0.75rem; padding: 1.1rem; margin: 0 0 0.9rem; }
 .card.stop { border-color: #b91c1c; } .card.caution { border-color: #b45309; } .card.good { border-color: #15803d; }
-.tag, .badge { display: inline-block; font-weight: 700; padding: 0.1rem 0.6rem; border-radius: 0.4rem; color: #ffffff; background: #1f2937; font-size: 0.9rem; }
+.tag, .badge { display: inline-block; font-weight: 700; padding: 0.1rem 0.6rem; border-radius: 0.4rem; color: #ffffff; background: var(--chip); font-size: 0.9rem; }
 .tag.stop { background: #991b1b; } .tag.caution { background: #92400e; } .tag.good { background: #166534; }
-.badge { background: #1f2937; letter-spacing: 0.05em; margin-bottom: 0.8rem; }
+.badge { letter-spacing: 0.05em; margin-bottom: 0.8rem; }
 dl.facts { display: grid; grid-template-columns: minmax(7rem, auto) 1fr; gap: 0.3rem 1rem; margin: 0.5rem 0 0; }
 dt { font-weight: 700; } dd { margin: 0; overflow-wrap: anywhere; }
+/* A long identifier: smaller, so it stays on one line at phone width. */
+dd.code { font-size: 0.85em; align-self: center; }
 ul { margin: 0; padding-left: 1.2rem; } li { margin-bottom: 0.7rem; }
 blockquote { margin: 0.4rem 0; padding: 0.5rem 0.9rem; border-left: 0.3rem solid var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 cite { display: block; font-size: 0.9rem; color: var(--muted); font-style: normal; margin-top: 0.25rem; }
@@ -35,13 +41,12 @@ textarea { width: 100%; font: inherit; padding: 0.6rem; border: 2px solid var(--
 .check { display: flex; gap: 0.7rem; align-items: flex-start; font-weight: 400; }
 .check input { width: 1.5rem; height: 1.5rem; margin-top: 0.2rem; flex: none; }
 .actions { display: flex; flex-wrap: wrap; gap: 0.9rem; margin: 1rem 0 0.5rem; }
-button { font: inherit; font-weight: 700; min-height: 3.2rem; padding: 0.7rem 1.6rem; border-radius: 0.6rem; border: 2px solid transparent; cursor: pointer; color: #ffffff; background: #1f2937; }
+button { font: inherit; font-weight: 700; min-height: 3.2rem; padding: 0.7rem 1.6rem; border-radius: 0.6rem; border: 2px solid transparent; cursor: pointer; color: #ffffff; background: var(--chip); }
 button.approve { background: #166534; } button.deny { background: #991b1b; } button.secondary { background: var(--paper); color: var(--ink); border-color: var(--edge); }
 button:disabled { opacity: 0.55; cursor: default; }
 button:focus-visible, textarea:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: 4px solid #2563eb; outline-offset: 3px; }
 .feedback:empty { display: none; }
-.feedback { font-weight: 700; color: #b91c1c; }
-@media (prefers-color-scheme: dark) { .feedback { color: #fca5a5; } }
+.feedback { font-weight: 700; color: var(--alert); }
 
 /* --- the trusted contact's views: approval card and approval page ------------- */
 html.compact { font-size: 100%; }
@@ -64,6 +69,8 @@ ul.reasons li { margin: 0 0 0.28rem; font-size: 0.95rem; line-height: 1.3; }
 ul.reasons li:last-child { margin-bottom: 0; }
 .source { font-size: 0.8rem; white-space: nowrap; color: var(--muted); }
 a.source { color: var(--link); text-decoration: underline; text-underline-offset: 0.15em; }
+.source.in-text { font-size: inherit; }
+span.source.in-text { color: inherit; }
 /* The decision stays on screen: it sticks to the bottom edge when the summary runs long. */
 .decide { position: sticky; bottom: 0; z-index: 2; margin: 0 -0.6rem 0.6rem; padding: 0.35rem 0.6rem 0.6rem; background: var(--wash); }
 .decide .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; margin: 0.35rem 0 0; }
