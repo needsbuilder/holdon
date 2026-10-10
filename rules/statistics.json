@@ -1,0 +1,62 @@
+{
+  "version": "2026-10-11",
+  "about": "Figures quoted in the README, each with the official page it was read from and a verbatim quote. Checked by scripts/verify-sources.mjs like every other sourced fact.",
+  "statistics": [
+    {
+      "id": "ic3-2025-elder-complaints",
+      "statement": "In 2025 the FBI's Internet Crime Complaint Center received 201,266 complaints from people aged 60 and over.",
+      "publisher": "FBI Internet Crime Complaint Center",
+      "title": "2025 IC3 Annual Report: IC3 Elder Fraud, complaints filed by individuals 60+",
+      "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+      "quote": "201,266 Complaints",
+      "checked": "2026-10-11"
+    },
+    {
+      "id": "ic3-2025-elder-losses",
+      "statement": "Those complaints reported $7.748 billion in losses, 59% more than in 2024.",
+      "publisher": "FBI Internet Crime Complaint Center",
+      "title": "2025 IC3 Annual Report: IC3 Elder Fraud, complaints filed by individuals 60+",
+      "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+      "quote": "$7.748 Billion in Losses",
+      "quote_context": "59% FROM 2024",
+      "checked": "2026-10-11"
+    },
+    {
+      "id": "ic3-2025-elder-average-loss",
+      "statement": "The average loss was $38,500, and 12,444 people aged 60 and over lost more than $100,000.",
+      "publisher": "FBI Internet Crime Complaint Center",
+      "title": "2025 IC3 Annual Report: IC3 Elder Fraud, complaints filed by individuals 60+",
+      "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+      "quote": "$38,500 Average Loss",
+      "quote_context": "12,444 Complainants Lost > $100K",
+      "checked": "2026-10-11"
+    },
+    {
+      "id": "ic3-2025-crypto-kiosks",
+      "statement": "Cryptocurrency ATMs and kiosks accounted for 13,460 complaints and $389 million in losses across all ages in 2025.",
+      "publisher": "FBI Internet Crime Complaint Center",
+      "title": "2025 IC3 Annual Report: Cryptocurrency ATMs/Kiosks",
+      "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+      "quote": "13,460 Complaints; $389 million in Losses",
+      "checked": "2026-10-11"
+    },
+    {
+      "id": "cfpb-trusted-contact",
+      "statement": "The Consumer Financial Protection Bureau advises older adults that choosing a trusted contact person can help protect their money.",
+      "publisher": "Consumer Financial Protection Bureau",
+      "title": "Protecting against fraud: resources for older adults",
+      "source_url": "https://www.consumerfinance.gov/consumer-tools/educator-tools/resources-for-older-adults/protecting-against-fraud/",
+      "quote": "Choosing a trusted contact person can help you protect your money",
+      "checked": "2026-10-11"
+    },
+    {
+      "id": "ftc-talk-to-someone",
+      "statement": "The FTC's advice for avoiding a scam includes stopping to talk to someone you trust before doing anything else.",
+      "publisher": "Federal Trade Commission",
+      "title": "How To Avoid a Scam",
+      "source_url": "https://consumer.ftc.gov/articles/how-avoid-scam",
+      "quote": "Stop and talk to someone you trust.",
+      "checked": "2026-10-11"
+    }
+  ]
+}

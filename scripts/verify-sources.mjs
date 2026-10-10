@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Re-fetches every source_url in registry/payees.json and rules/scam-patterns.json
+// Re-fetches every source_url in registry/payees.json, rules/scam-patterns.json and rules/statistics.json
 // and checks that each stored quote (and quote_context) appears verbatim on the page.
 //
 // Usage: node scripts/verify-sources.mjs [--refresh] [--only <substring>]
@@ -109,6 +109,11 @@ function collect() {
     for (const pattern of rules.patterns) {
       for (const source of pattern.guidance ?? []) facts.push({ where: `rule:${pattern.id}`, ...source });
     }
+  }
+  const statsPath = join(root, 'rules', 'statistics.json');
+  if (existsSync(statsPath)) {
+    const stats = JSON.parse(readFileSync(statsPath, 'utf8'));
+    for (const stat of stats.statistics) facts.push({ where: `statistic:${stat.id}`, ...stat });
   }
   return facts;
 }
