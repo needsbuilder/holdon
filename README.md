@@ -7,6 +7,19 @@ Hold On is a self-hosted [Model Context Protocol](https://modelcontextprotocol.i
 > **All payments are simulated.** No real money moves, and no payment provider is connected.
 > Hold On is an independent project. It is not affiliated with, endorsed by, or an official tool of Amazon or of any organisation named in its registry.
 
+## Required technology, and where it runs
+
+The Alexa+ track asks for a self-hosted MCP server on spec version 2025-11-25 or later over Streamable HTTP, or an Agent Skill. This repository contains both. The table says where each one is imported and called, and how to watch it run.
+
+| Technology | Where in the code | See it run |
+| --- | --- | --- |
+| MCP server over Streamable HTTP | `src/index.ts` (what `npm start` runs) starts `src/http/app.ts`. The `/mcp` route there is built on `createMcpExpressApp` from `@modelcontextprotocol/express` and served by `NodeStreamableHTTPServerTransport` from `@modelcontextprotocol/node`. | `npm start`, then the `curl` command under [Quickstart](#quickstart) |
+| MCP spec 2025-11-25 | The same route. An `initialize` request negotiates `2025-11-25` and opens a session (`Mcp-Session-Id`), which is what lets the server ask a question (elicitation) and stream progress. | `test/protocol.test.ts` sends a raw `initialize` and asserts the negotiated version |
+| MCP spec 2026-07-28 | The same route. `isLegacyRequest` from `@modelcontextprotocol/server` decides per request; newer clients are served by `createMcpHandler`. | `test/protocol.test.ts`, `test/e2e.test.ts` |
+| Tools | `src/mcp/server.ts` registers twelve tools on an `McpServer`, eight for the older adult's assistant and four for the trusted contact's. | `tools/list` with each demo token; [Tool reference](#tool-reference) |
+| MCP Apps | `src/mcp/apps.ts` uses `registerAppTool` and `registerAppResource` from `@modelcontextprotocol/ext-apps/server`. The card sources are in `ui/`. | `test/apps.test.ts` drives the built cards with the official `AppBridge` host |
+| Agent Skill | `skills/holdon-money-safety/SKILL.md`. A skill is loaded by the assistant, not by the server, so nothing in `src/` reads it. Point an assistant that supports Agent Skills at that directory, next to the MCP server. | `test/docs.test.ts` checks the frontmatter and that every tool the skill names is served |
+
 ## Why
 
 In its 2025 annual report, the FBI's Internet Crime Complaint Center counted **201,266 complaints from people aged 60 and over, with $7.748 billion in reported losses, up 59% from 2024**. The average loss was $38,500, and 12,444 people lost more than $100,000 ([2025 IC3 Annual Report](https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf), "IC3 Elder Fraud" section; figures read on 2026-10-11 and recorded in `rules/statistics.json`).
@@ -40,7 +53,7 @@ npm run seed         # creates the demo circle in data/holdon.db
 npm start            # http://localhost:8787
 ```
 
-`npm run demo` resets the demo data and starts the server from source in one step.
+`npm run seed:reset` empties the database first, for a clean demo. `npm run demo` resets the demo data and starts the server from source in one step.
 
 The demo circle is **Margaret Ellis** (the older adult) and her daughter **Sarah Ellis** (the trusted contact), with a $100 approval limit:
 
@@ -71,9 +84,17 @@ The approval page and the MCP Apps approval card share one phone-first layout: w
 
 | A bill that can be approved | A stopped request | Already decided |
 | --- | --- | --- |
-| <img src="docs/screenshots/page-approvable-390x844.png" width="240" alt="Approval page on a phone: Margaret Ellis asked to make a payment, $182.40 to Con Edison, Confirmed payee, with Approve and Deny buttons"> | <img src="docs/screenshots/page-blocked-390x844.png" width="240" alt="Approval page on a phone: $2,000 to IRS, Stopped by Hold On, This request cannot be approved, five reasons with source links, and a Deny button"> | <img src="docs/screenshots/page-decided-390x844.png" width="240" alt="Approval page on a phone: $182.40 to Con Edison, Approved by Sarah Ellis, with her note"> |
+| <img src="docs/screenshots/page-approvable-390x844.png" width="240" alt="Approval page on a phone: Margaret Ellis asked to make a payment, $182.40 to Con Edison, Confirmed payee, with Approve and Deny buttons"> | <img src="docs/screenshots/page-blocked-390x844.png" width="240" alt="Approval page on a phone: $2,000 to IRS, Stopped by Hold On, Nothing will be paid, This request cannot be approved, five reasons with source links, and a Deny button"> | <img src="docs/screenshots/page-decided-390x844.png" width="240" alt="Approval page on a phone: $182.40 to Con Edison, Approved by Sarah Ellis, with her note"> |
 
-These are real captures from headless Chrome at 390x844. `npm run screenshots` takes them again and fails if anything that belongs on the first screen is not there (see `scripts/screenshots.mjs`; add `--stage <url>` to also capture the card inside a Voicestage phone frame and press its buttons with the mouse).
+These are real captures from headless Chrome at 390x844. `npm run screenshots` takes them again and fails if anything that belongs on the first screen is not there (see `scripts/screenshots.mjs`; add `--stage <url>` to also capture the cards inside a Voicestage phone frame and kitchen display, and press the buttons with the mouse).
+
+The page and the cards follow the system's light or dark setting, and a host's theme when it names one.
+
+| Approval page, dark | Receipt card, phone size | Receipt card, dark |
+| --- | --- | --- |
+| <img src="docs/screenshots/page-approvable-dark-390x844.png" width="240" alt="The approval page in dark mode: $182.40 to Con Edison, Confirmed payee, Approve and Deny buttons"> | <img src="docs/screenshots/receipt-card-390x844.png" width="240" alt="Receipt card: $182.40 paid to Con Edison, SIMULATED PAYMENT, paid with a credit or debit card, confirmation number, time and receipt number"> | <img src="docs/screenshots/receipt-card-dark-390x844.png" width="240" alt="The same receipt card in dark mode"> |
+
+The rest of `docs/screenshots/` shows the same views inside the simulator's phone frame and on its kitchen display.
 
 ### Three scenarios to try
 
@@ -179,7 +200,7 @@ type Payee = { status: PayeeStatus; name?: string; registry_id?: string; categor
                              source?: { url: string; quote: string } }[];
                note: string };
 type Reason = { kind: "scam_pattern" | "official_fact" | "policy"; blocking: boolean; text: string;
-                source?: { publisher: string; title?: string; url: string; quote: string } };
+                source?: { publisher: string; title?: string; url: string; quote: string; named_in_text?: string } };
 type PolicyDecision = { requires_family_approval: boolean; reason: string; blocked: boolean; blocked_reasons: string[] };
 type Decision = { by: string; at: string; note?: string };
 type Receipt = { receipt_id: string; hold_id: string; amount_usd: number; payee: string; method: PaymentMethod;
@@ -204,7 +225,7 @@ type Circle = { id: string; name: string; members: { id: string; name: string }[
 
 In a member's view, `summary` and `payee_name` have phone numbers, links and email addresses removed. A family view carries the original words.
 
-`FamilyHold.reasons` is the same information as `risk_signals`, `payee.mismatches` and `blocked_reasons`, arranged for display: one reason per item, the ones that stop the request first, each with the official page behind it. `text` is a pattern label from `rules/scam-patterns.json`, a fact summary from `registry/payees.json` (also given as `mismatches[].fact`), a registry comparison, or a policy sentence; policy reasons have no `source`.
+`FamilyHold.reasons` is the same information as `risk_signals`, `payee.mismatches` and `blocked_reasons`, arranged for display: one reason per item, the ones that stop the request first, each with the official page behind it. `text` is a pattern label from `rules/scam-patterns.json`, a fact summary from `registry/payees.json` (also given as `mismatches[].fact`), a registry comparison, or a policy sentence; policy reasons have no `source`. When `text` already names the source's website (a fact that ends "...official site, irs.gov."), `source.named_in_text` is that mention, so a display can make it the link instead of printing the host a second time.
 
 ### For the older adult's assistant (role `member`)
 
@@ -289,9 +310,13 @@ SDK: the v2 MCP TypeScript SDK (`@modelcontextprotocol/server`, `/node`, `/expre
 
 Each card is one self-contained HTML file of a few kilobytes: no images, no network access, text written with `textContent` only. The older adult's cards contain no links at all. The trusted contact's approval card links only to the official pages cited in the rules and registry files, and opens them by asking the host (`ui/open-link`); what a caller supplied is shown as struck-through text, never as a link. The approval card's buttons call `holdon_family_decide` through the host, so the server applies the same rules as for any other caller. The cards speak the MCP Apps protocol directly (JSON-RPC over `postMessage`) instead of bundling an SDK; `test/apps.test.ts` loads them in jsdom and drives them with the official `AppBridge` host from `@modelcontextprotocol/ext-apps`, with tool calls forwarded to a real server.
 
+The cards support light and dark: they follow `prefers-color-scheme`, and `hostContext.theme` when the host sends one (including a later change of it). The receipt card was checked on its own at 390x844 and on the simulator's kitchen display (a card area of about 897x455).
+
 ## Agent Skill
 
 `skills/holdon-money-safety/SKILL.md` follows the open Agent Skills format. It tells an assistant when to call which tool, never to repeat a number or link from a suspicious message, how to phrase holds and denials, and what to do when someone is frightened or was told to keep a payment secret.
+
+The assistant loads the skill; the server does not. The skill passes the reference validator (`skills-ref validate skills/holdon-money-safety`), and `test/docs.test.ts` checks that every tool it names is one the server offers. Whether a particular assistant follows it has to be checked on that assistant.
 
 ## Safety model
 
@@ -357,7 +382,7 @@ npm run typecheck
 | `test/service.test.ts` | State machine, expiry, pay-time re-checks, policy floor, isolation between circles, approval link signatures |
 | `test/http.test.ts` | Event stream per role with replay, approval page, webhook |
 | `test/apps.test.ts` | MCP Apps cards driven by the official host bridge |
-| `scripts/screenshots.mjs` | Not part of `npm test`: real Chrome at 390x844, the first-screen rule, and mouse presses on Approve, Deny and a source link |
+| `scripts/screenshots.mjs` | Not part of `npm test`: real Chrome at 390x844, the first-screen rule, light and dark, the receipt card at phone and kitchen-display sizes, and mouse presses on Approve, Deny and a source link |
 
 ## Limitations
 
@@ -409,6 +434,13 @@ Read on 2026-10-11. Quotes and dates are in the data files.
 - Dominion Energy: <https://www.dominionenergy.com/scams>
 - National Grid: <https://www.nationalgridus.com/Our-Company/Scam-Alert>
 - Duke Energy: <https://news.duke-energy.com/releases/10th-annual-utility-scam-awareness-day-putting-customers-first-in-the-fight-against-scams>
+
+## Hackathon notes
+
+- [docs/hackathon/friction-log.md](docs/hackathon/friction-log.md): what got in the way while building this, with error text and versions.
+- [docs/hackathon/product-feedback.md](docs/hackathon/product-feedback.md): feedback on the MCP specification, the TypeScript SDK, MCP Apps and Agent Skills, and feature requests.
+
+No Alexa+ developer tooling was available to hackathon participants. Hold On has been run against the MCP SDK's client, the MCP Apps host bridge and a browser-based simulator, never against an Alexa+ device or runtime.
 
 ## License
 
