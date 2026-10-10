@@ -276,6 +276,7 @@ export function verifyPayee(registry: Registry, trustedPayees: TrustedPayee[], q
         code: 'method_never_used',
         severity: 'high',
         detail: `${entry.name} says it does not take payment by ${methodLabel(method)}. ${never.summary}`,
+        fact: never.summary,
         source: { url: never.source_url, quote: never.quote },
       });
     } else if (entry.accepted_methods.some((fact) => fact.methods.includes(method))) {
@@ -290,6 +291,7 @@ export function verifyPayee(registry: Registry, trustedPayees: TrustedPayee[], q
       code: 'never_asks_for_money',
       severity: 'high',
       detail: `${neverAsks.summary} A request to pay ${entry.name} does not come from the real agency.`,
+      fact: neverAsks.summary,
       source: { url: neverAsks.source_url, quote: neverAsks.quote },
     });
   }
@@ -303,6 +305,7 @@ export function verifyPayee(registry: Registry, trustedPayees: TrustedPayee[], q
         code: 'channel_not_used',
         severity: 'medium',
         detail: `This request came by ${channelLabel(channel)}. ${fact.summary}`,
+        fact: fact.summary,
         source: { url: fact.source_url, quote: fact.quote },
       });
     }

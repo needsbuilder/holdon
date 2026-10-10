@@ -1,5 +1,13 @@
-:root { color-scheme: light dark; --ink: #111827; --paper: #ffffff; --edge: #1f2937; --muted: #374151; --wash: #f3f4f6; }
-@media (prefers-color-scheme: dark) { :root { --ink: #f9fafb; --paper: #111827; --edge: #e5e7eb; --muted: #d1d5db; --wash: #030712; } }
+/*
+ * One stylesheet for the three MCP Apps cards and for the standalone family
+ * approval page (src/approval.ts), so the two never drift apart.
+ *
+ * The older adult's cards use large type. The trusted contact's views carry the
+ * `compact` class and are laid out for a phone: the summary and the buttons fit
+ * on the first screen, and the rest sits under "Details".
+ */
+:root { color-scheme: light dark; --ink: #111827; --paper: #ffffff; --edge: #1f2937; --muted: #374151; --wash: #f3f4f6; --link: #1d4ed8; }
+@media (prefers-color-scheme: dark) { :root { --ink: #f9fafb; --paper: #111827; --edge: #e5e7eb; --muted: #d1d5db; --wash: #030712; --link: #93c5fd; } }
 * { box-sizing: border-box; }
 html { font-size: 112.5%; }
 body { margin: 0; padding: 0.75rem; font: 1rem/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--wash); }
@@ -30,7 +38,48 @@ textarea { width: 100%; font: inherit; padding: 0.6rem; border: 2px solid var(--
 button { font: inherit; font-weight: 700; min-height: 3.2rem; padding: 0.7rem 1.6rem; border-radius: 0.6rem; border: 2px solid transparent; cursor: pointer; color: #ffffff; background: #1f2937; }
 button.approve { background: #166534; } button.deny { background: #991b1b; } button.secondary { background: var(--paper); color: var(--ink); border-color: var(--edge); }
 button:disabled { opacity: 0.55; cursor: default; }
-button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 4px solid #2563eb; outline-offset: 3px; }
+button:focus-visible, textarea:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: 4px solid #2563eb; outline-offset: 3px; }
 .feedback:empty { display: none; }
 .feedback { font-weight: 700; color: #b91c1c; }
 @media (prefers-color-scheme: dark) { .feedback { color: #fca5a5; } }
+
+/* --- the trusted contact's views: approval card and approval page ------------- */
+html.compact { font-size: 100%; }
+.compact body { padding: 0.6rem; line-height: 1.4; }
+.compact h1 { font-size: 1rem; font-weight: 600; line-height: 1.3; margin: 0; }
+.compact h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
+.compact p { margin: 0 0 0.5rem; }
+.compact .card { padding: 0.75rem 0.85rem; margin: 0 0 0.6rem; border-left-width: 0.45rem; }
+.compact .eyebrow { font-size: 0.72rem; margin: 0 0 0.15rem; color: var(--muted); }
+.compact .say { font-size: 1.05rem; }
+.amount { font-size: 1.65rem; font-weight: 800; line-height: 1.15; margin: 0.1rem 0 0.2rem; overflow-wrap: anywhere; }
+.amount .to { font-size: 1.05rem; font-weight: 400; }
+.compact .meta { font-size: 0.875rem; color: var(--muted); margin: 0 0 0.45rem; }
+.compact .verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; margin: 0 0 0.45rem; font-size: 0.875rem; }
+.compact .cannot { margin: 0 0 0.3rem; }
+.compact .calm { margin: 0; color: var(--muted); }
+.compact .list-title { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0.1rem 0 0.2rem; }
+ul.reasons { margin: 0; padding-left: 1.1rem; }
+ul.reasons li { margin: 0 0 0.28rem; font-size: 0.95rem; line-height: 1.3; }
+ul.reasons li:last-child { margin-bottom: 0; }
+.source { font-size: 0.8rem; white-space: nowrap; color: var(--muted); }
+a.source { color: var(--link); text-decoration: underline; text-underline-offset: 0.15em; }
+/* The decision stays on screen: it sticks to the bottom edge when the summary runs long. */
+.decide { position: sticky; bottom: 0; z-index: 2; margin: 0 -0.6rem 0.6rem; padding: 0.35rem 0.6rem 0.6rem; background: var(--wash); }
+.decide .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; margin: 0.35rem 0 0; }
+.decide .actions.single { grid-template-columns: 1fr; }
+.decide button { width: 100%; min-height: 3rem; padding: 0.55rem 1rem; font-size: 1.05rem; }
+.decide .check { margin: 0.2rem 0 0.4rem; font-size: 0.95rem; line-height: 1.3; }
+.decide .feedback { margin: 0.45rem 0 0; }
+summary { cursor: pointer; font-weight: 700; }
+details.note summary { padding: 0.45rem 0; color: var(--link); text-decoration: underline; text-underline-offset: 0.15em; }
+details.note label { margin: 0 0 0.25rem; font-weight: 400; }
+details.note textarea { margin-bottom: 0.3rem; }
+details.more { margin: 0 0 0.6rem; }
+details.more > summary { padding: 0.7rem 0.2rem; }
+details.more .card { border-left-width: 2px; }
+.compact .result h1 { font-size: 1.5rem; font-weight: 800; line-height: 1.2; margin: 0 0 0.3rem; }
+.compact .decided p { margin: 0 0 0.25rem; }
+.compact .queue { margin: 0 0 0.4rem; }
+.banner { border-left-width: 0.45rem; }
+.banner p { margin: 0; }

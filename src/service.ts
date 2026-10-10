@@ -10,7 +10,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { evaluateRequest, pickClarifyingQuestion, policyMethodBlocks, type EngineContext } from './domain/engine.js';
+import { evaluateRequest, explainReasons, pickClarifyingQuestion, policyMethodBlocks, type EngineContext } from './domain/engine.js';
 import {
   sayDecision,
   sayHoldPlaced,
@@ -30,6 +30,7 @@ import {
   type CheckOutcome,
   type ClarifyingField,
   type ContactChannel,
+  type HoldReason,
   type HoldStatus,
   type PayeeResult,
   type PayeeStatus,
@@ -124,6 +125,8 @@ export interface FamilyHoldView extends Omit<MemberHoldView, 'say_to_user' | 'ne
   secrecy_requested: boolean;
   untrusted_contact_details: { claimed_phone?: string; claimed_url?: string; warning: string };
   risk_signals: RiskSignal[];
+  /** The warning signs and blocking reasons as separate items, blocking ones first, each with its source. */
+  reasons: HoldReason[];
   payee: PayeeResult;
   policy: PolicyDecision & { approval_threshold_usd: number };
   can_approve: boolean;
@@ -861,6 +864,7 @@ export class HoldOnService {
         warning: UNTRUSTED_WARNING,
       },
       risk_signals: check.outcome.risk_signals,
+      reasons: explainReasons(check.outcome),
       payee: check.outcome.payee,
       policy: { ...check.outcome.policy, approval_threshold_usd: policy.approval_threshold_usd },
       can_approve: open && !blocker,

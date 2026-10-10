@@ -51,7 +51,15 @@ const mismatch = z.object({
   code: z.string(),
   severity: z.enum(SEVERITIES),
   detail: z.string(),
+  fact: z.string().optional().describe("The registry's own one-line statement of the official fact behind this mismatch, verbatim. Absent for a plain comparison such as a phone number that is not on file."),
   source: z.object({ url: z.string(), quote: z.string() }).optional(),
+});
+
+const reason = z.object({
+  kind: z.enum(['scam_pattern', 'official_fact', 'policy']),
+  blocking: z.boolean().describe('True when this reason alone is enough to stop the request.'),
+  text: z.string().describe('A pattern label from the rules file, a fact summary from the registry, a registry comparison, or a policy sentence. One reason per item.'),
+  source: z.object({ publisher: z.string(), title: z.string().optional(), url: z.string(), quote: z.string() }).optional(),
 });
 
 const official = z
@@ -137,6 +145,7 @@ const familyHold = z.object({
     .object({ claimed_phone: z.string().optional(), claimed_url: z.string().optional(), warning: z.string() })
     .describe('Details taken from the suspicious message. Shown to the trusted contact for context only; never call or open them.'),
   risk_signals: z.array(riskSignal),
+  reasons: z.array(reason).describe('Warning signs and blocking reasons as separate items, blocking ones first, each with its official source where there is one. Meant for display as a list.'),
   payee,
   policy: policyDecision.extend({ approval_threshold_usd: z.number() }),
   can_approve: z.boolean(),

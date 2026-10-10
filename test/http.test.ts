@@ -175,8 +175,18 @@ describe('family approval page', () => {
     expect(page.headers.get('cache-control')).toBe('no-store');
     expect(page.headers.get('content-security-policy')).toContain("default-src 'none'");
     const html = await page.text();
-    expect(html).toContain('<html lang="en">');
+    expect(html).toContain('<html lang="en" class="compact">');
+    expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
     expect(html).toContain('Margaret Ellis asked to make a payment');
+    expect(html).toContain('<p class="amount" data-above-fold="amount">$182.40<span class="to"> to </span>Con Edison</p>');
+    expect(html).toContain('<span class="tag good">Confirmed payee</span><span class="state">Waiting for your decision</span>');
+    expect(html).toContain('No known scam pattern matched this request.');
+    expect(html).toContain('simulated payments');
+    // The buttons come before "Details", not inside it.
+    expect(html.indexOf('value="approve"')).toBeLessThan(html.indexOf('<details class="more">'));
+    expect(html.indexOf('value="deny"')).toBeLessThan(html.indexOf('<details class="more">'));
+    // A browser sends "Origin: null" with the form under `no-referrer`, and the server refuses that.
+    expect(page.headers.get('referrer-policy')).toBe('same-origin');
     expect(html).toContain('$182.40');
     expect(html).toContain('Con Edison');
     expect(html).toContain('1-800-752-6633');
@@ -186,10 +196,11 @@ describe('family approval page', () => {
     expect(html).not.toContain('<script');
 
     const token = new URL(url).searchParams.get('t')!;
+    // As a browser does it: the form post carries the page's own origin.
     const posted = await fetch(`${t.url}/approve/${hold.id}`, {
       method: 'POST',
       redirect: 'manual',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: t.url },
       body: new URLSearchParams({ t: token, decision: 'approve', note: 'Looks right, Mom.' }),
     });
     expect(posted.status).toBe(303);
@@ -197,6 +208,10 @@ describe('family approval page', () => {
     const doneHtml = await done.text();
     expect(doneHtml).toContain('You approved this request.');
     expect(doneHtml).not.toContain('value="approve"');
+    // An already-decided request: the decision in place of the buttons.
+    expect(doneHtml).toContain('data-above-fold="decision"');
+    expect(doneHtml).toContain('<p role="status"><strong>Approved</strong> by Sarah Ellis.</p><p>Note: Looks right, Mom.</p>');
+    expect(doneHtml).not.toContain('<button');
 
     expect(t.service.memberHoldView(t.store.getHold(hold.id)!)).toMatchObject({ status: 'approved', next_step: 'pay', decision: { by: 'Sarah Ellis', note: 'Looks right, Mom.' } });
     expect(t.service.pay(t.margaret, { hold_id: hold.id }).receipt.payee).toBe('Con Edison');
@@ -210,7 +225,31 @@ describe('family approval page', () => {
     const url = t.service.approvalUrl(hold.id, t.sarah.user_id);
     const html = await (await fetch(url)).text();
     expect(html).toContain('Stopped by Hold On');
-    expect(html).toContain('This request cannot be approved.');
+    expect(html).toContain('<p class="cannot" data-above-fold="cannot-approve"><strong>This request cannot be approved.</strong></p>');
+    // Why it was stopped: one list item per reason, each with its source where the data has one.
+    const list = html.match(/<ul class="reasons"[^>]*>([\s\S]*?)<\/ul>/)![1]!;
+    const items = [...list.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((match) => match[1]!);
+    expect(items.map((item) => item.replace(/<[^>]+>/g, '').replace(/&#39;/g, "'").trim())).toEqual([
+      'Asked to pay with gift cards or a prepaid card consumer.ftc.gov',
+      'Someone claiming to be from the government is demanding money consumer.ftc.gov',
+      'Told to keep the payment secret consumer.ftc.gov',
+      // This request also carried a link; the registry comparison is its own item, with the official site as its source.
+      "The link that was given is not on Internal Revenue Service's official site, irs.gov. irs.gov",
+      'The IRS never asks for or accepts gift cards for a tax bill. irs.gov',
+      'Hold On never pays a government agency, utility or other official payee with gift cards.',
+    ]);
+    expect(items[0]).toContain('<a class="source" href="https://consumer.ftc.gov/articles/avoiding-and-reporting-gift-card-scams" target="_blank" rel="noreferrer noopener"');
+    expect(items[3]).toContain('href="https://www.irs.gov/help/tax-scams/recognize-tax-scams-and-fraud"');
+    expect(items[4]).toContain('href="https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays"');
+    expect(items[5]).not.toContain('<a');
+    // The caller's own link never appears in the reasons, only in the struck-through context block.
+    expect(list).not.toContain('irs-settlement-desk');
+    // The reasons are no longer run together in a paragraph.
+    expect(html).not.toContain('Matches a known scam pattern');
+    expect(html).not.toContain('You can deny it, and a call');
+    // The summary, the reasons and the button come before "Details".
+    expect(html.indexOf('value="deny"')).toBeLessThan(html.indexOf('<details class="more">'));
+    expect(html.indexOf('<ul class="reasons"')).toBeLessThan(html.indexOf('value="deny"'));
     expect(html).not.toContain('value="approve"');
     expect(html).toContain('value="deny"');
     // Sources are quoted and linked; the scammer's link and number are text only, never links.
@@ -234,7 +273,9 @@ describe('family approval page', () => {
       body: new URLSearchParams({ t: token, decision: 'approve', trust_payee: 'true' }),
     });
     expect(forced.status).toBe(409);
-    expect(await forced.text()).toContain('role="alert"');
+    const forcedHtml = await forced.text();
+    expect(forcedHtml).toContain('<div class="card banner stop" role="alert"><p>This request was stopped and cannot be approved. The reasons are listed below.</p></div>');
+    expect(forcedHtml).not.toContain('Matches a known scam pattern');
     expect(t.store.getHold(hold.id)?.status).toBe('pending_family');
 
     const denied = await fetch(`${t.url}/approve/${hold.id}`, {

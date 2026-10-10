@@ -13,13 +13,16 @@ const outDir = join(root, 'dist', 'ui');
 
 export const CARDS = [
   { file: 'hold-card.html', entry: 'hold-card.js', title: 'Hold On: hold' },
-  { file: 'approval-card.html', entry: 'approval-card.js', title: 'Hold On: family approval' },
+  { file: 'approval-card.html', entry: 'approval-card.js', title: 'Hold On: family approval', htmlClass: 'compact' },
   { file: 'receipt-card.html', entry: 'receipt-card.js', title: 'Hold On: receipt' },
 ];
 
 export async function buildUi({ quiet = false } = {}) {
   mkdirSync(outDir, { recursive: true });
-  const css = readFileSync(join(root, 'ui', 'card.css'), 'utf8').replace(/\s*\n\s*/g, '\n').trim();
+  const css = readFileSync(join(root, 'ui', 'card.css'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim();
   for (const card of CARDS) {
     const result = await build({
       entryPoints: [join(root, 'ui', card.entry)],
@@ -35,7 +38,7 @@ export async function buildUi({ quiet = false } = {}) {
     // An inline script ends at the first "</script", wherever it appears.
     const script = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script').replace(/<!--/g, '<\\!--');
     const html = `<!doctype html>
-<html lang="en">
+<html lang="en"${card.htmlClass ? ` class="${card.htmlClass}"` : ''}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

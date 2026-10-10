@@ -67,6 +67,14 @@ Connect any MCP client to `http://localhost:8787/mcp` with one of the tokens as 
 
 **The whole loop with nothing but this repository and a browser:** when a hold is placed, the server prints a signed approval link for Sarah to its log (it is also in `holdon_family_inbox` and in the event stream for the contact). Open it, read the context, press Approve or Deny. Margaret's assistant sees the decision on its next `holdon_get_hold` or `holdon_wait_for_decision`.
 
+The approval page and the MCP Apps approval card share one phone-first layout: who is asking, how much and to whom, the verdict and the buttons are on the first screen. A stopped request shows there that it cannot be approved and why, one reason per line with its official source. The rest is under "Details".
+
+| A bill that can be approved | A stopped request | Already decided |
+| --- | --- | --- |
+| <img src="docs/screenshots/page-approvable-390x844.png" width="240" alt="Approval page on a phone: Margaret Ellis asked to make a payment, $182.40 to Con Edison, Confirmed payee, with Approve and Deny buttons"> | <img src="docs/screenshots/page-blocked-390x844.png" width="240" alt="Approval page on a phone: $2,000 to IRS, Stopped by Hold On, This request cannot be approved, five reasons with source links, and a Deny button"> | <img src="docs/screenshots/page-decided-390x844.png" width="240" alt="Approval page on a phone: $182.40 to Con Edison, Approved by Sarah Ellis, with her note"> |
+
+These are real captures from headless Chrome at 390x844. `npm run screenshots` takes them again and fails if anything that belongs on the first screen is not there (see `scripts/screenshots.mjs`; add `--stage <url>` to also capture the card inside a Voicestage phone frame and press its buttons with the mouse).
+
 ### Three scenarios to try
 
 | Margaret says | Check result | What happens next |
@@ -167,8 +175,11 @@ type Payee = { status: PayeeStatus; name?: string; registry_id?: string; categor
                             accepted_methods: PaymentMethod[]; never_methods: PaymentMethod[] };
                matches: string[];
                mismatches: { field: "url" | "phone" | "address" | "payment_method" | "contact_channel" | "payment_request";
-                             code: string; severity: "high" | "medium"; detail: string; source?: { url: string; quote: string } }[];
+                             code: string; severity: "high" | "medium"; detail: string; fact?: string;
+                             source?: { url: string; quote: string } }[];
                note: string };
+type Reason = { kind: "scam_pattern" | "official_fact" | "policy"; blocking: boolean; text: string;
+                source?: { publisher: string; title?: string; url: string; quote: string } };
 type PolicyDecision = { requires_family_approval: boolean; reason: string; blocked: boolean; blocked_reasons: string[] };
 type Decision = { by: string; at: string; note?: string };
 type Receipt = { receipt_id: string; hold_id: string; amount_usd: number; payee: string; method: PaymentMethod;
@@ -180,7 +191,8 @@ type MemberHold = Hold & { say_to_user: string; next_step: "wait" | "pay" | "non
 type FamilyHold = Hold & { member: { id: string; name: string }; member_words: string; contact_channel?: ContactChannel;
                            urgency_claims: UrgencyClaim[]; secrecy_requested: boolean;
                            untrusted_contact_details: { claimed_phone?: string; claimed_url?: string; warning: string };
-                           risk_signals: RiskSignal[]; payee: Payee; policy: PolicyDecision & { approval_threshold_usd: number };
+                           risk_signals: RiskSignal[]; reasons: Reason[]; payee: Payee;
+                           policy: PolicyDecision & { approval_threshold_usd: number };
                            can_approve: boolean; cannot_approve_reason?: string; requires_trust_payee: boolean; approval_url: string };
 type Circle = { id: string; name: string; members: { id: string; name: string }[];
                 contacts: { id: string; name: string; relationship?: string }[];
@@ -191,6 +203,8 @@ type Circle = { id: string; name: string; members: { id: string; name: string }[
 ```
 
 In a member's view, `summary` and `payee_name` have phone numbers, links and email addresses removed. A family view carries the original words.
+
+`FamilyHold.reasons` is the same information as `risk_signals`, `payee.mismatches` and `blocked_reasons`, arranged for display: one reason per item, the ones that stop the request first, each with the official page behind it. `text` is a pattern label from `rules/scam-patterns.json`, a fact summary from `registry/payees.json` (also given as `mismatches[].fact`), a registry comparison, or a policy sentence; policy reasons have no `source`.
 
 ### For the older adult's assistant (role `member`)
 
@@ -273,7 +287,7 @@ SDK: the v2 MCP TypeScript SDK (`@modelcontextprotocol/server`, `/node`, `/expre
 
 ### MCP Apps cards
 
-Each card is one self-contained HTML file of a few kilobytes: no links, no images, no network access, text written with `textContent` only. The approval card's buttons call `holdon_family_decide` through the host, so the server applies the same rules as for any other caller. The cards speak the MCP Apps protocol directly (JSON-RPC over `postMessage`) instead of bundling an SDK; `test/apps.test.ts` loads them in jsdom and drives them with the official `AppBridge` host from `@modelcontextprotocol/ext-apps`, with tool calls forwarded to a real server.
+Each card is one self-contained HTML file of a few kilobytes: no images, no network access, text written with `textContent` only. The older adult's cards contain no links at all. The trusted contact's approval card links only to the official pages cited in the rules and registry files, and opens them by asking the host (`ui/open-link`); what a caller supplied is shown as struck-through text, never as a link. The approval card's buttons call `holdon_family_decide` through the host, so the server applies the same rules as for any other caller. The cards speak the MCP Apps protocol directly (JSON-RPC over `postMessage`) instead of bundling an SDK; `test/apps.test.ts` loads them in jsdom and drives them with the official `AppBridge` host from `@modelcontextprotocol/ext-apps`, with tool calls forwarded to a real server.
 
 ## Agent Skill
 
@@ -343,6 +357,7 @@ npm run typecheck
 | `test/service.test.ts` | State machine, expiry, pay-time re-checks, policy floor, isolation between circles, approval link signatures |
 | `test/http.test.ts` | Event stream per role with replay, approval page, webhook |
 | `test/apps.test.ts` | MCP Apps cards driven by the official host bridge |
+| `scripts/screenshots.mjs` | Not part of `npm test`: real Chrome at 390x844, the first-screen rule, and mouse presses on Approve, Deny and a source link |
 
 ## Limitations
 
@@ -353,7 +368,7 @@ npm run typecheck
 - **One trusted contact decides.** Notifications go to the event stream, the inbox tool, the server log and an optional webhook. There is no SMS, email or push delivery, and no second approver.
 - **Demo authentication.** Static bearer tokens, no OAuth, no rate limiting, no audit export. Sessions for 2025-era clients are kept in memory in one process.
 - **The 2026-07-28 path** is covered by fewer tests than the 2025-11-25 path.
-- **The MCP Apps cards** were exercised in jsdom against the official host bridge, not in a production host.
+- **The MCP Apps cards** were exercised in jsdom against the official host bridge and in headless Chrome inside a Voicestage phone frame, not in a production assistant host. The first-screen layout was measured at 390x844 and in that frame (about 397x614); a much smaller card area would push the buttons to a bar that sticks to the bottom edge.
 - **Not legal or financial advice**, and not a substitute for reporting fraud to the FTC, a bank or the police.
 
 ## Sources

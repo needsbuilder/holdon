@@ -92,7 +92,29 @@ export interface PayeeMismatch {
   code: string;
   severity: Severity;
   detail: string;
+  /**
+   * The registry's own one-line statement of the official fact this mismatch
+   * rests on, copied verbatim from `registry/payees.json`. Absent when the
+   * mismatch is a comparison (a phone number or link that is not on file).
+   */
+  fact?: string;
   source?: { url: string; quote: string };
+}
+
+/**
+ * One reason, ready to show as one list item to the trusted contact.
+ *
+ * `text` is never written for the occasion: it is a pattern label from
+ * `rules/scam-patterns.json`, a fact summary from `registry/payees.json`, the
+ * registry comparison sentence, or the policy sentence the engine already gave.
+ */
+export interface HoldReason {
+  kind: 'scam_pattern' | 'official_fact' | 'policy';
+  /** True when this reason alone is enough to stop the request. */
+  blocking: boolean;
+  text: string;
+  /** The official page behind the reason, when the data has one. Policy reasons have none. */
+  source?: { publisher: string; title?: string; url: string; quote: string };
 }
 
 export interface OfficialPhone {

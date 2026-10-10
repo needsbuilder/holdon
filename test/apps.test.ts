@@ -11,6 +11,8 @@ import { AppBridge } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { loadRegistry } from '../src/domain/registry.js';
+import { loadRules } from '../src/domain/rules.js';
 import { containsActionableContact } from '../src/domain/text.js';
 import { CONTACT_TOKEN, MEMBER_TOKEN, SCENARIOS, call, connect, startTestServer, type TestServer } from './helpers.js';
 
@@ -46,7 +48,7 @@ async function until(condition: () => boolean, what: string): Promise<void> {
 }
 
 /** Load a card in jsdom and connect the official AppBridge to it as the host. */
-async function openCard(html: string, client: Client) {
+async function openCard(html: string, client: Client, hostCapabilities: Record<string, unknown> = { serverTools: {} }) {
   const fromCard: unknown[] = [];
   let deliver: ((message: unknown) => void) | undefined;
   const dom = new JSDOM(html, {
@@ -81,7 +83,12 @@ async function openCard(html: string, client: Client) {
   };
 
   const calls: Array<{ name: string; arguments?: Record<string, unknown> }> = [];
-  const bridge = new AppBridge(null, { name: 'test-host', version: '1.0.0' }, { serverTools: {} });
+  const opened: string[] = [];
+  const bridge = new AppBridge(null, { name: 'test-host', version: '1.0.0' }, hostCapabilities as never);
+  bridge.onopenlink = async ({ url }) => {
+    opened.push(url);
+    return {};
+  };
   bridge.oncalltool = async (params) => {
     calls.push({ name: params.name, arguments: params.arguments as Record<string, unknown> });
     return (await client.callTool({ name: params.name, arguments: params.arguments })) as never;
@@ -97,6 +104,7 @@ async function openCard(html: string, client: Client) {
     document: window.document,
     bridge,
     calls,
+    opened,
     text: () => window.document.getElementById('root')!.textContent ?? '',
     button: (label: string) => [...window.document.querySelectorAll('button')].find((b) => b.textContent === label) as HTMLButtonElement | undefined,
     close: () => window.close(),
@@ -136,7 +144,7 @@ describe('MCP Apps metadata', () => {
       await readCard(sarah, 'ui://holdon/approval-card.html'),
     ];
     for (const page of html) {
-      expect(page).toContain('<html lang="en">');
+      expect(page).toMatch(/<html lang="en"( class="compact")?>/);
       expect(page).toContain('<main id="root" aria-live="polite">');
       expect(page).toContain('telephone=no');
       expect(page.length).toBeLessThan(40_000);
@@ -230,15 +238,36 @@ describe('approval card (trusted contact)', () => {
     await until(() => Boolean(card.button('Deny')), 'the approval card to render');
 
     expect(card.document.querySelector('h1')!.textContent).toBe('Margaret Ellis asked to make a payment');
-    expect(card.text()).toContain('Stopped by Hold On');
-    expect(card.text()).toContain('$2,000');
-    expect(card.text()).toContain('Asked to pay with gift cards or a prepaid card');
+    expect(card.document.querySelector('.amount')!.textContent).toBe('$2,000 to IRS');
+    expect(card.document.querySelector('.verdict .tag')!.textContent).toBe('Stopped by Hold On');
+    expect(card.text()).toContain('simulated payments');
+
+    // Why it was stopped: a list, one reason per item, in the words of the rules and registry files.
+    const reasons = [...card.document.querySelectorAll('ul.reasons > li')].map((item) => item.textContent!.replace(/\s+/g, ' ').trim());
+    expect(reasons).toEqual([
+      'Asked to pay with gift cards or a prepaid card consumer.ftc.gov',
+      'Someone claiming to be from the government is demanding money consumer.ftc.gov',
+      'Told to keep the payment secret consumer.ftc.gov',
+      'The IRS never asks for or accepts gift cards for a tax bill. irs.gov',
+      'Hold On never pays a government agency, utility or other official payee with gift cards.',
+    ]);
+    // The old single paragraph of joined reasons is gone.
+    expect(card.text()).not.toContain('Matches a known scam pattern');
+    // The summary and the buttons are what must fit on the first screen; the rest is under "Details".
+    expect([...card.document.querySelectorAll('[data-above-fold]')].map((node) => node.getAttribute('data-above-fold'))).toEqual(['who', 'amount', 'verdict', 'cannot-approve', 'reasons', 'actions']);
+    const details = card.document.querySelector('details.more')!;
+    expect(details.querySelector('summary')!.textContent).toBe('Details');
+    expect(details.hasAttribute('open')).toBe(false);
+    expect(details.textContent).toContain("In Margaret Ellis's words");
+    expect(details.contains(card.button('Deny')!)).toBe(false);
     expect(card.text()).toContain('"No real business or government agency will ever tell you to buy a gift card to pay them."');
     expect(card.text()).toContain('Federal Trade Commission');
     expect(card.text()).toContain('800-829-1040');
     // The caller's number is shown as struck-through text for context, never as a link.
     expect(card.document.querySelector('.untrusted')!.textContent).toBe('1-888-555-0142');
+    // This host did not say it can open links, so even the official sources are plain text.
     expect(card.document.querySelectorAll('a, [href]')).toHaveLength(0);
+    expect([...card.document.querySelectorAll('ul.reasons .source')].map((node) => node.textContent)).toEqual(['consumer.ftc.gov', 'consumer.ftc.gov', 'consumer.ftc.gov', 'irs.gov']);
     // A stopped request offers Deny only.
     expect(card.button('Approve')).toBeUndefined();
     expect(card.text()).toContain('This request cannot be approved.');
@@ -252,6 +281,75 @@ describe('approval card (trusted contact)', () => {
     expect((await call<any>(margaret, 'holdon_get_hold', { hold_id: placed.hold_id })).status).toBe('denied');
   });
 
+  it('links each reason to its official source through the host, and never links anything from the caller', async () => {
+    const check = await call<any>(margaret, 'holdon_check_request', { ...SCENARIOS.irsGiftCards, claimed_url: 'http://irs-settlement-desk.com/pay' });
+    await call<any>(margaret, 'holdon_place_hold', { check_id: check.check_id, summary: 'IRS agent wants gift cards' });
+    const card = await openCard(await readCard(sarah, 'ui://holdon/approval-card.html'), sarah, { serverTools: {}, openLinks: {} });
+    await card.bridge.sendToolResult((await sarah.callTool({ name: 'holdon_family_inbox', arguments: {} })) as never);
+    await until(() => Boolean(card.button('Deny')), 'the approval card to render');
+
+    const official = new Set<string>();
+    for (const pattern of loadRules().patterns) for (const source of pattern.guidance) official.add(source.source_url);
+    for (const payee of loadRegistry().payees) {
+      for (const group of [payee.official_domains, payee.phones, payee.addresses, payee.accepted_methods, payee.never_methods, payee.contact_facts]) for (const fact of group) official.add(fact.source_url);
+    }
+    const links = [...card.document.querySelectorAll('a')] as HTMLAnchorElement[];
+    expect(links.length).toBeGreaterThanOrEqual(4);
+    for (const link of links) {
+      expect(link.className).toBe('source');
+      expect(link.getAttribute('href')).toMatch(/^https:\/\//);
+      expect(official.has(link.getAttribute('href')!), link.getAttribute('href')!).toBe(true);
+      expect(link.getAttribute('aria-label')).toMatch(/^Source: /);
+    }
+    const reasonLinks = [...card.document.querySelectorAll('ul.reasons a')] as HTMLAnchorElement[];
+    expect(reasonLinks.map((link) => link.getAttribute('href'))).toContain('https://consumer.ftc.gov/articles/avoiding-and-reporting-gift-card-scams');
+    expect(reasonLinks.map((link) => link.getAttribute('href'))).toContain('https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays');
+    // What the caller supplied is text only.
+    const untrusted = [...card.document.querySelectorAll('.untrusted')];
+    expect(untrusted.map((node) => node.textContent)).toEqual(['1-888-555-0142', 'http://irs-settlement-desk.com/pay']);
+    expect(untrusted.every((node) => node.closest('a') === null && node.querySelector('a') === null)).toBe(true);
+    expect(links.some((link) => /settlement|555/.test(link.getAttribute('href')! + link.textContent))).toBe(false);
+
+    // A press asks the host to open the page (MCP Apps ui/open-link); the card itself goes nowhere.
+    const before = card.window.location.href;
+    reasonLinks[0]!.click();
+    await until(() => card.opened.length === 1, 'the open-link request');
+    expect(card.opened).toEqual(['https://consumer.ftc.gov/articles/avoiding-and-reporting-gift-card-scams']);
+    expect(card.window.location.href).toBe(before);
+    expect(card.calls).toEqual([]);
+  });
+
+  it('lists warning signs for a request that is not stopped, and keeps the buttons out of "Details"', async () => {
+    const check = await call<any>(margaret, 'holdon_check_request', { description: 'My nephew is stranded after a car accident and needs money for the tow right away', payee_name: 'Kevin Marsh', amount_usd: 300, payment_method: 'card' });
+    expect(check.verdict).toBe('hold_for_family');
+    await call<any>(margaret, 'holdon_place_hold', { check_id: check.check_id, summary: 'Nephew needs tow money' });
+    const card = await openCard(await readCard(sarah, 'ui://holdon/approval-card.html'), sarah);
+    await card.bridge.sendToolResult((await sarah.callTool({ name: 'holdon_family_inbox', arguments: {} })) as never);
+    await until(() => Boolean(card.button('Approve')), 'the approval card to render');
+    expect(card.document.querySelector('.verdict .tag')!.textContent).toBe('Warning signs found');
+    expect(card.document.querySelector('.list-title')!.textContent).toBe('Warning signs');
+    expect([...card.document.querySelectorAll('ul.reasons > li')].map((item) => item.textContent!.replace(/\s+/g, ' ').trim())).toEqual([
+      'Urgent money for a family member in trouble consumer.ftc.gov',
+      'Pressure to pay right away consumer.ftc.gov',
+    ]);
+    expect(card.document.querySelector('.cannot')).toBeNull();
+    expect(card.document.querySelector('details.more')!.contains(card.button('Approve')!)).toBe(false);
+  });
+
+  it('shows an already-decided request with its decision and no buttons', async () => {
+    const check = await call<any>(margaret, 'holdon_check_request', SCENARIOS.utilityBill);
+    const placed = await call<any>(margaret, 'holdon_place_hold', { check_id: check.check_id, summary: 'Electric bill' });
+    await call(sarah, 'holdon_family_decide', { hold_id: placed.hold_id, decision: 'approve', note: 'Looks right, Mom.' });
+    const card = await openCard(await readCard(sarah, 'ui://holdon/approval-card.html'), sarah);
+    await card.bridge.sendToolResult((await sarah.callTool({ name: 'holdon_family_inbox', arguments: { status: 'all' } })) as never);
+    await until(() => card.text().includes('Approved by Sarah Ellis.'), 'the decided state');
+    expect(card.document.querySelector('.amount')!.textContent).toBe('$182.40 to Con Edison');
+    expect(card.document.querySelector('.verdict .state')!.textContent).toBe('Approved');
+    expect(card.text()).toContain('Note: Looks right, Mom.');
+    expect(card.document.querySelectorAll('button')).toHaveLength(0);
+    expect([...card.document.querySelectorAll('[data-above-fold]')].map((node) => node.getAttribute('data-above-fold'))).toEqual(['who', 'amount', 'verdict', 'decision']);
+  });
+
   it('approves a verified bill', async () => {
     const check = await call<any>(margaret, 'holdon_check_request', SCENARIOS.utilityBill);
     const placed = await call<any>(margaret, 'holdon_place_hold', { check_id: check.check_id, summary: 'Electric bill' });
@@ -259,7 +357,11 @@ describe('approval card (trusted contact)', () => {
     await card.bridge.sendToolResult((await sarah.callTool({ name: 'holdon_family_inbox', arguments: {} })) as never);
     await until(() => Boolean(card.button('Approve')), 'the approve button');
     expect(card.text()).toContain('Confirmed payee');
+    expect(card.document.querySelector('.amount')!.textContent).toBe('$182.40 to Con Edison');
+    expect(card.text()).toContain('No known scam pattern matched this request.');
+    expect(card.document.querySelector('ul.reasons')).toBeNull();
     expect(card.document.getElementById('trust')).toBeNull();
+    expect([...card.document.querySelectorAll('[data-above-fold]')].map((node) => node.getAttribute('data-above-fold'))).toEqual(['who', 'amount', 'verdict', 'actions']);
 
     card.button('Approve')!.click();
     await until(() => card.document.querySelector('h1')?.textContent === 'Approved', 'the approved state');

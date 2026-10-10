@@ -1,10 +1,14 @@
 // Approval card for the trusted contact.
 //
-// Shows one request with its full context and lets the contact approve or deny
-// it. The buttons call the `holdon_family_decide` tool through the host, so the
+// Built for a phone: who is asking, how much and to whom, the verdict in a few
+// words and the Approve / Deny buttons all fit on the first screen. A stopped
+// request shows, in the same place, that it cannot be approved and why, one
+// reason per line with its official source. Everything else is under "Details".
+//
+// The buttons call the `holdon_family_decide` tool through the host, so the
 // server applies exactly the same rules as for any other caller: a stopped
 // request cannot be approved, and an unknown payee needs an explicit vouch.
-import { channelName, el, facts, methodName, start, textOf, usd, when } from './shared.js';
+import { channelName, el, facts, methodName, sourceLink, start, textOf, usd, when } from './shared.js';
 
 const VERDICTS = {
   stop: ['Stopped by Hold On', 'stop'],
@@ -21,61 +25,55 @@ const STATUS = {
   cancelled: 'Cancelled by your family member',
 };
 
-function signals(hold) {
-  if (!hold.risk_signals?.length) return el('p', {}, 'No known scam pattern matched this request.');
+/** The reasons to list. Older servers do not send `reasons`; fall back to the warning signs they do send. */
+function reasonsOf(hold) {
+  if (Array.isArray(hold.reasons)) return hold.reasons;
+  return (hold.risk_signals ?? []).map((signal) => ({ kind: 'scam_pattern', blocking: signal.severity === 'high', text: signal.label, source: signal.source }));
+}
+
+/** One reason per item, each with its source where the data has one. */
+function reasonList(reasons, api) {
   return el(
     'ul',
-    { class: 'signals' },
-    hold.risk_signals.map((signal) =>
-      el(
-        'li',
-        {},
-        el('strong', {}, signal.label),
-        ' ',
-        el('span', { class: `tag ${signal.severity === 'high' ? 'stop' : 'caution'}` }, signal.severity),
-        el('p', {}, signal.why),
-        // Official guidance, quoted. Shown as text: this card contains no links at all.
-        el('blockquote', {}, `"${signal.source.quote}"`, el('cite', {}, `${signal.source.publisher}, ${signal.source.title}`)),
-      ),
-    ),
+    { class: 'reasons', 'data-above-fold': 'reasons' },
+    reasons.map((reason) => el('li', {}, reason.text, reason.source ? ' ' : undefined, sourceLink(reason.source, api))),
   );
 }
 
-function payee(hold) {
-  const info = hold.payee ?? {};
-  const section = el('section', { class: 'card', 'aria-labelledby': 'payee-h' }, el('h2', { id: 'payee-h' }, 'About the payee'), el('p', {}, info.note ?? ''));
-  if (info.mismatches?.length) section.append(el('ul', {}, info.mismatches.map((m) => el('li', {}, m.detail))));
-  if (info.official) {
-    section.append(
-      facts([
-        ['Official name', info.official.name],
-        ['Official website', info.official.website],
-        ['Official phone', info.official.phones.map((p) => `${p.number} (${p.label})`).join('; ')],
-        ['Never takes', info.official.never_methods.map(methodName).join(', ')],
-      ]),
-    );
-  }
-  return section;
-}
+function summary(hold, api) {
+  const [verdictLabel, tone] = VERDICTS[hold.verdict] ?? ['Request', 'neutral'];
+  const reasons = reasonsOf(hold);
+  // A stopped request leads with what stops it; anything else shows every warning sign.
+  const listed = hold.blocked ? reasons.filter((reason) => reason.blocking) : reasons;
+  const meta = [methodName(hold.payment_method), channelName(hold.contact_channel), hold.secrecy_requested ? 'Told to keep it secret' : undefined].filter(Boolean).join(' · ');
+  const open = hold.status === 'pending_family';
 
-function untrusted(hold) {
-  const details = hold.untrusted_contact_details ?? {};
-  if (!details.claimed_phone && !details.claimed_url) return undefined;
-  return el(
+  const card = el(
     'section',
-    { class: 'card stop', 'aria-labelledby': 'untrusted-h' },
-    el('h2', { id: 'untrusted-h' }, 'Details from the caller or message'),
-    el('p', {}, details.warning),
-    facts([
-      ['Phone given', details.claimed_phone ? el('span', { class: 'untrusted' }, details.claimed_phone) : undefined],
-      ['Link given', details.claimed_url ? el('span', { class: 'untrusted' }, details.claimed_url) : undefined],
-    ]),
+    { class: `card summary ${hold.blocked ? 'stop' : tone}`, 'aria-labelledby': 'who' },
+    el('p', { class: 'eyebrow' }, 'Hold On · simulated payments'),
+    el('h1', { id: 'who', 'data-above-fold': 'who' }, `${hold.member.name} asked to make a payment`),
+    el('p', { class: 'amount', 'data-above-fold': 'amount' }, usd(hold.amount_usd) ?? 'No amount given', el('span', { class: 'to' }, ' to '), hold.payee_name ?? 'no payee named'),
+    el('p', { class: 'meta' }, meta),
+    el('p', { class: 'verdict', 'data-above-fold': 'verdict' }, el('span', { class: `tag ${hold.blocked ? 'stop' : tone}` }, verdictLabel), el('span', { class: 'state' }, STATUS[hold.status] ?? hold.status)),
   );
+
+  if (hold.blocked) {
+    card.append(el('p', { class: 'cannot', 'data-above-fold': 'cannot-approve' }, el('strong', {}, 'This request cannot be approved.')));
+    if (listed.length > 0) card.append(el('h2', { class: 'list-title' }, 'Why it was stopped'), reasonList(listed, api));
+  } else {
+    if (open && !hold.can_approve && hold.cannot_approve_reason) {
+      card.append(el('p', { class: 'cannot', 'data-above-fold': 'cannot-approve' }, el('strong', {}, 'This request cannot be approved. '), hold.cannot_approve_reason));
+    }
+    if (listed.length > 0) card.append(el('h2', { class: 'list-title' }, 'Warning signs'), reasonList(listed, api));
+    else card.append(el('p', { class: 'calm' }, 'No known scam pattern matched this request.'));
+  }
+  return card;
 }
 
 function decisionForm(hold, api, onDecided) {
-  const section = el('section', { class: 'card', 'aria-labelledby': 'decide-h' }, el('h2', { id: 'decide-h' }, 'Your decision'));
-  const note = el('textarea', { id: 'note', maxlength: 500, rows: 3 });
+  const section = el('section', { class: 'decide', 'aria-label': 'Your decision', 'data-above-fold': 'actions' });
+  const note = el('textarea', { id: 'note', maxlength: 500, rows: 2 });
   const trust = hold.requires_trust_payee ? el('input', { type: 'checkbox', id: 'trust' }) : undefined;
   const feedback = el('p', { role: 'alert', class: 'feedback' });
   const buttons = [];
@@ -100,13 +98,21 @@ function decisionForm(hold, api, onDecided) {
     }
   }
 
-  section.append(el('label', { for: 'note' }, `Message for ${hold.member.name} (optional)`), note);
+  section.append(
+    el(
+      'details',
+      { class: 'note' },
+      el('summary', {}, `Add a message for ${hold.member.name}`),
+      el('label', { for: 'note', class: 'small' }, 'Optional. It is read to them together with your decision.'),
+      note,
+    ),
+  );
   if (trust) {
     section.append(
       el('label', { class: 'check', for: 'trust' }, trust, el('span', {}, `I personally know and trust ${hold.payee_name ?? 'this payee'}. Hold On could not find them in its registry of official payees. (Needed to approve.)`)),
     );
   }
-  const actions = el('div', { class: 'actions' });
+  const actions = el('div', { class: hold.can_approve ? 'actions' : 'actions single' });
   if (hold.can_approve) {
     const approve = el('button', { type: 'button', class: 'approve', onclick: () => decide('approve') }, 'Approve');
     buttons.push(approve);
@@ -115,46 +121,100 @@ function decisionForm(hold, api, onDecided) {
   const deny = el('button', { type: 'button', class: 'deny', onclick: () => decide('deny') }, 'Deny');
   buttons.push(deny);
   actions.append(deny);
-  section.append(actions);
-  if (!hold.can_approve && hold.cannot_approve_reason) {
-    section.append(el('p', { role: 'note' }, el('strong', {}, 'This request cannot be approved. '), hold.cannot_approve_reason));
-  }
-  section.append(feedback);
+  section.append(actions, feedback);
   return section;
 }
 
-function renderHold(root, hold, api) {
-  const [verdictLabel, tone] = VERDICTS[hold.verdict] ?? ['Request', 'neutral'];
-  root.append(
-    el('h1', {}, `${hold.member.name} asked to make a payment`),
-    el('p', { class: 'lead' }, `${STATUS[hold.status] ?? hold.status}. Asked ${when(hold.created_at) ?? ''}.`),
-    el(
-      'section',
-      { class: `card ${hold.blocked ? 'stop' : tone}`, 'aria-labelledby': 'request-h' },
-      el('h2', { id: 'request-h' }, 'The request ', el('span', { class: `tag ${hold.blocked ? 'stop' : tone}` }, verdictLabel)),
-      facts([
-        ['Amount', usd(hold.amount_usd) ?? 'No amount given'],
-        ['To', hold.payee_name ?? 'No payee named'],
-        ['How', methodName(hold.payment_method)],
-        ['Reached them by', channelName(hold.contact_channel)],
-        ['Told to keep it secret', hold.secrecy_requested ? 'Yes' : undefined],
-      ]),
-      hold.blocked ? el('p', {}, el('strong', {}, 'Hold On will not pay this. '), (hold.blocked_reasons ?? []).join(' ')) : undefined,
-    ),
-    el('section', { class: 'card', 'aria-labelledby': 'words-h' }, el('h2', { id: 'words-h' }, `In ${hold.member.name}'s words`), el('blockquote', {}, hold.member_words)),
-    el('section', { class: 'card', 'aria-labelledby': 'signs-h' }, el('h2', { id: 'signs-h' }, 'Warning signs'), signals(hold)),
-    payee(hold),
-    untrusted(hold),
-  );
-  if (hold.status === 'pending_family') {
-    root.append(
-      decisionForm(hold, api, (decided) => {
-        api.show({ structuredContent: decided, content: [] });
-      }),
+/** Everything that does not have to be read before deciding. */
+function details(hold, api) {
+  const more = el('details', { class: 'more' }, el('summary', {}, 'Details'));
+  more.append(el('section', { class: 'card', 'aria-labelledby': 'words-h' }, el('h2', { id: 'words-h' }, `In ${hold.member.name}'s words`), el('blockquote', {}, hold.member_words), el('p', { class: 'small' }, `Asked ${when(hold.created_at) ?? ''}`)));
+
+  if (hold.risk_signals?.length) {
+    more.append(
+      el(
+        'section',
+        { class: 'card', 'aria-labelledby': 'signs-h' },
+        el('h2', { id: 'signs-h' }, 'Warning signs'),
+        el(
+          'ul',
+          { class: 'signals' },
+          hold.risk_signals.map((signal) =>
+            el(
+              'li',
+              {},
+              el('strong', {}, signal.label),
+              ' ',
+              el('span', { class: `tag ${signal.severity === 'high' ? 'stop' : 'caution'}` }, signal.severity),
+              el('p', {}, signal.why),
+              // Official guidance, quoted.
+              el('blockquote', {}, `"${signal.source.quote}"`, el('cite', {}, `${signal.source.publisher}, ${signal.source.title} `, sourceLink(signal.source, api))),
+            ),
+          ),
+        ),
+      ),
     );
-  } else if (hold.decision) {
-    root.append(el('section', { class: 'card' }, el('h2', {}, 'Decision'), el('p', { role: 'status' }, `${STATUS[hold.status] ?? hold.status} by ${hold.decision.by}.`)));
   }
+
+  const info = hold.payee ?? {};
+  const payee = el('section', { class: 'card', 'aria-labelledby': 'payee-h' }, el('h2', { id: 'payee-h' }, 'About the payee'), el('p', {}, info.note ?? ''));
+  if (info.mismatches?.length) {
+    payee.append(
+      el(
+        'ul',
+        {},
+        info.mismatches.map((m) => el('li', {}, m.detail, m.source ? el('blockquote', {}, `"${m.source.quote}"`, el('cite', {}, sourceLink({ ...m.source, publisher: info.name }, api))) : undefined)),
+      ),
+    );
+  }
+  if (info.official) {
+    payee.append(
+      facts([
+        ['Official name', info.official.name],
+        ['Official website', info.official.website],
+        ['Official phone', info.official.phones.map((p) => `${p.number} (${p.label})`).join('; ')],
+        ['Accepts', info.official.accepted_methods.map(methodName).join(', ')],
+        ['Never takes', info.official.never_methods.map(methodName).join(', ')],
+      ]),
+    );
+  }
+  more.append(payee);
+
+  const untrusted = hold.untrusted_contact_details ?? {};
+  if (untrusted.claimed_phone || untrusted.claimed_url) {
+    more.append(
+      el(
+        'section',
+        { class: 'card stop', 'aria-labelledby': 'untrusted-h' },
+        el('h2', { id: 'untrusted-h' }, 'Details from the caller or message'),
+        el('p', {}, untrusted.warning),
+        // Shown as struck-through text for context. Never a link.
+        facts([
+          ['Phone given', untrusted.claimed_phone ? el('span', { class: 'untrusted' }, untrusted.claimed_phone) : undefined],
+          ['Link given', untrusted.claimed_url ? el('span', { class: 'untrusted' }, untrusted.claimed_url) : undefined],
+        ]),
+      ),
+    );
+  }
+  return more;
+}
+
+function renderHold(root, hold, api) {
+  root.append(summary(hold, api));
+  if (hold.status === 'pending_family') {
+    root.append(decisionForm(hold, api, (decided) => api.show({ structuredContent: decided, content: [] })));
+  } else {
+    root.append(
+      el(
+        'section',
+        { class: 'card decided', 'data-above-fold': 'decision' },
+        el('h2', {}, 'Decision'),
+        el('p', { role: 'status' }, hold.decision ? `${STATUS[hold.status] ?? hold.status} by ${hold.decision.by}.` : `${STATUS[hold.status] ?? hold.status}.`),
+        hold.decision?.note ? el('p', {}, `Note: ${hold.decision.note}`) : undefined,
+      ),
+    );
+  }
+  root.append(details(hold, api));
 }
 
 function render(root, data, api) {
@@ -164,9 +224,10 @@ function render(root, data, api) {
     root.append(
       el(
         'section',
-        { class: `card ${approved ? 'good' : 'stop'}` },
+        { class: `card summary result ${approved ? 'good' : 'stop'}`, 'data-above-fold': 'decision' },
+        el('p', { class: 'eyebrow' }, 'Hold On · simulated payments'),
         el('h1', {}, approved ? 'Approved' : 'Denied'),
-        el('p', { class: 'lead', role: 'status' }, data.say_to_user ?? ''),
+        el('p', { class: 'say', role: 'status' }, data.say_to_user ?? ''),
         facts([
           ['Decided by', data.decision.by],
           ['Your note', data.decision.note],
@@ -178,11 +239,13 @@ function render(root, data, api) {
   // A single hold, or the inbox: show the first one still waiting, else the newest.
   const holds = data.holds ?? [data];
   if (holds.length === 0) {
-    root.append(el('section', { class: 'card good' }, el('h1', {}, 'Nothing is waiting'), el('p', { class: 'lead', role: 'status' }, data.say_to_user ?? 'There are no requests to decide.')));
+    root.append(
+      el('section', { class: 'card summary result good' }, el('p', { class: 'eyebrow' }, 'Hold On · simulated payments'), el('h1', {}, 'Nothing is waiting'), el('p', { class: 'say', role: 'status' }, data.say_to_user ?? 'There are no requests to decide.')),
+    );
     return;
   }
   const waiting = holds.filter((hold) => hold.status === 'pending_family');
-  if (waiting.length > 1) root.append(el('p', { class: 'small', role: 'status' }, `${waiting.length} requests are waiting. Showing the newest first.`));
+  if (waiting.length > 1) root.append(el('p', { class: 'small queue', role: 'status' }, `${waiting.length} requests are waiting. Showing the newest first.`));
   renderHold(root, waiting[0] ?? holds[0], api);
 }
 

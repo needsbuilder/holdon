@@ -14,6 +14,7 @@ import {
   type CheckInput,
   type CheckOutcome,
   type ClarifyingField,
+  type HoldReason,
   type NextStep,
   type PaymentMethod,
   type Policy,
@@ -46,6 +47,45 @@ function claimsOfficialPayee(registryId: string | undefined, text: string, rules
   return ['government', 'utility'].some((lexicon) =>
     (rules.lexicons[lexicon] ?? []).some((phrase) => containsPhrase(text, phrase)),
   );
+}
+
+/** The sentence recorded in `policy.blocked_reasons` for a high-severity pattern. */
+function patternBlockReason(label: string): string {
+  return `Matches a known scam pattern: ${label}.`;
+}
+
+/**
+ * The reasons behind an outcome as separate items, each with its source, for
+ * showing as a list. Pure, and it adds no wording of its own:
+ *
+ * - a scam pattern is shown by its `label` from `rules/scam-patterns.json`
+ * - an official fact by its `summary` from `registry/payees.json`, or by the
+ *   comparison sentence when the mismatch is a number or link that is not on file
+ * - a policy block by the sentence already recorded in `policy.blocked_reasons`
+ *
+ * Reasons that stop the request come first.
+ */
+export function explainReasons(outcome: Pick<CheckOutcome, 'risk_signals' | 'payee' | 'policy'>): HoldReason[] {
+  const patterns: HoldReason[] = outcome.risk_signals.map((signal) => ({
+    kind: 'scam_pattern',
+    blocking: signal.severity === 'high',
+    text: signal.label,
+    source: signal.source,
+  }));
+  const facts: HoldReason[] = outcome.payee.mismatches.map((mismatch) => ({
+    kind: 'official_fact',
+    blocking: mismatch.severity === 'high',
+    text: mismatch.fact ?? mismatch.detail,
+    ...(mismatch.source ? { source: { publisher: outcome.payee.name ?? 'Official website', url: mismatch.source.url, quote: mismatch.source.quote } } : {}),
+  }));
+  // Whatever is left in blocked_reasons was added by policy, not by a pattern or a registry fact.
+  const explained = new Set([
+    ...outcome.risk_signals.filter((signal) => signal.severity === 'high').map((signal) => patternBlockReason(signal.label)),
+    ...outcome.payee.mismatches.filter((mismatch) => mismatch.severity === 'high').map((mismatch) => mismatch.detail),
+  ]);
+  const policy: HoldReason[] = outcome.policy.blocked_reasons.filter((reason) => !explained.has(reason)).map((text) => ({ kind: 'policy', blocking: true, text }));
+  const all = [...patterns, ...facts, ...policy];
+  return [...all.filter((reason) => reason.blocking), ...all.filter((reason) => !reason.blocking)];
 }
 
 /** Policy blocks that apply to a payment method, independent of any scam pattern. */
@@ -88,7 +128,7 @@ export function evaluateRequest(input: CheckInput, ctx: EngineContext): CheckOut
 
   const officialPayee = claimsOfficialPayee(payee.registry_id, text, ctx.rules);
   const blocked_reasons = [
-    ...risk_signals.filter((s) => s.severity === 'high').map((s) => `Matches a known scam pattern: ${s.label}.`),
+    ...risk_signals.filter((s) => s.severity === 'high').map((s) => patternBlockReason(s.label)),
     ...payee.mismatches.filter((m) => m.severity === 'high').map((m) => m.detail),
     ...policyMethodBlocks(ctx.policy, effective_method, officialPayee),
   ];

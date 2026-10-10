@@ -144,6 +144,37 @@ export function methodLabel(method: string): string {
   return METHOD_LABELS[method] ?? method;
 }
 
+/** Short names for labels and lists, the same wording the MCP Apps cards use (ui/shared.js). */
+const METHOD_NAMES: Record<string, string> = {
+  gift_card: 'Gift cards',
+  crypto: 'Cryptocurrency',
+  wire: 'Wire transfer',
+  zelle: 'Zelle',
+  payment_app: 'Payment app',
+  cash: 'Cash',
+  check: 'Check',
+  card: 'Credit or debit card',
+  bank_transfer: 'Bank account',
+  unknown: 'Not specified',
+};
+
+export function methodName(method: string): string {
+  return METHOD_NAMES[method] ?? 'Not specified';
+}
+
+const CHANNEL_NAMES: Record<string, string> = {
+  phone_call: 'Phone call',
+  text: 'Text message',
+  email: 'Email',
+  mail: 'Postal mail',
+  in_person: 'In person',
+  website: 'Website or pop-up',
+};
+
+export function channelName(channel: string | undefined): string | undefined {
+  return channel ? CHANNEL_NAMES[channel] : undefined;
+}
+
 const CHANNEL_LABELS: Record<string, string> = {
   phone_call: 'a phone call',
   text: 'a text message',

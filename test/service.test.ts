@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { signApprovalToken, verifyApprovalToken } from '../src/approval.js';
+import { loadRegistry } from '../src/domain/registry.js';
+import { loadRules } from '../src/domain/rules.js';
 import { containsActionableContact } from '../src/domain/text.js';
 import { HoldOnError, hashToken } from '../src/service.js';
 import { SCENARIOS, createTestService, type TestService } from './helpers.js';
@@ -318,6 +320,57 @@ describe('views', () => {
     expect(familyView.approval_url).toContain(`/approve/${hold.id}`);
     expect(familyView.policy.approval_threshold_usd).toBe(100);
     expect(familyView.secrecy_requested).toBe(true);
+  });
+});
+
+describe('reasons for the trusted contact', () => {
+  const rules = loadRules();
+  const registry = loadRegistry();
+  const labels = new Set(rules.patterns.map((pattern) => pattern.label));
+  const summaries = new Set(registry.payees.flatMap((payee) => [...payee.never_methods, ...payee.contact_facts].map((fact) => fact.summary)));
+
+  it('are separate items, blocking ones first, in the words of the rules and registry files', () => {
+    const { hold, outcome } = holdFor({ ...SCENARIOS.irsGiftCards, urgency_claims: ['arrest_or_legal_threat', 'pay_immediately'] });
+    const reasons = t.service.familyHoldView(hold, t.sarah.user_id).reasons;
+
+    expect(reasons.map((reason) => [reason.kind, reason.blocking, reason.text])).toEqual([
+      ['scam_pattern', true, 'Asked to pay with gift cards or a prepaid card'],
+      ['scam_pattern', true, 'Someone claiming to be from the government is demanding money'],
+      ['scam_pattern', true, 'Told to keep the payment secret'],
+      ['official_fact', true, 'The IRS never asks for or accepts gift cards for a tax bill.'],
+      ['policy', true, 'Hold On never pays a government agency, utility or other official payee with gift cards.'],
+      ['scam_pattern', false, 'Pressure to pay right away'],
+      ['official_fact', false, expect.stringMatching(/^The phone number that was given is not one of the numbers Internal Revenue Service publishes on irs\.gov\./)],
+    ]);
+    // Nothing is written for the occasion: pattern labels and registry summaries are copied as they are.
+    for (const reason of reasons.filter((item) => item.kind === 'scam_pattern')) expect(labels.has(reason.text), reason.text).toBe(true);
+    expect(summaries.has(reasons[3]!.text)).toBe(true);
+    // A policy sentence is the one the engine already recorded, and has no source to link.
+    expect(outcome.policy.blocked_reasons).toContain(reasons[4]!.text);
+    expect(reasons[4]!.source).toBeUndefined();
+    // Every other reason carries the official page it rests on.
+    expect(reasons[0]!.source).toMatchObject({ publisher: 'Federal Trade Commission', url: 'https://consumer.ftc.gov/articles/avoiding-and-reporting-gift-card-scams' });
+    expect(reasons[3]!.source).toMatchObject({ publisher: 'Internal Revenue Service', url: 'https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays' });
+    for (const reason of reasons.filter((item) => item.kind !== 'policy')) expect(reason.source?.url, reason.text).toMatch(/^https:\/\//);
+    // Exactly the reasons that were already recorded as blocking, no more and no fewer.
+    expect(reasons.filter((reason) => reason.blocking)).toHaveLength(outcome.policy.blocked_reasons.length);
+  });
+
+  it('are empty for a verified bill, and list warning signs for a request that is only held', () => {
+    expect(t.service.familyHoldView(holdFor(SCENARIOS.utilityBill).hold, t.sarah.user_id).reasons).toEqual([]);
+    const held = holdFor({ description: 'National Grid left a voicemail about my balance', payee_name: 'National Grid', amount_usd: 60, payment_method: 'card', contact_channel: 'phone_call', claimed_phone: '888-555-0142' });
+    const reasons = t.service.familyHoldView(held.hold, t.sarah.user_id).reasons;
+    expect(reasons).toHaveLength(1);
+    expect(reasons[0]).toMatchObject({ kind: 'official_fact', blocking: false, source: { publisher: 'National Grid', url: 'https://www.nationalgridus.com/Our-Company/Scam-Alert' } });
+    expect(reasons[0]!.text).not.toContain('555');
+  });
+
+  it('do not change the verdict, the stored reasons or what can be approved', () => {
+    const { hold, outcome } = holdFor({ ...SCENARIOS.irsGiftCards, urgency_claims: ['arrest_or_legal_threat'] });
+    const view = t.service.familyHoldView(hold, t.sarah.user_id);
+    expect(view).toMatchObject({ verdict: 'stop', blocked: true, can_approve: false, blocked_reasons: outcome.policy.blocked_reasons });
+    expect(view.cannot_approve_reason).toMatch(/^This request was stopped and cannot be approved\./);
+    expect(errorCode(() => t.service.familyDecide(t.sarah, { hold_id: hold.id, decision: 'approve' }))).toBe('blocked');
   });
 });
 

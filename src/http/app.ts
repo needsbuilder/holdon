@@ -329,7 +329,11 @@ export function createHoldOnApp(options: AppOptions): HoldOnApp {
   // --- family approval page ---------------------------------------------------
   const pageHeaders = (res: Response) => {
     res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Referrer-Policy', 'no-referrer');
+    // `same-origin`, not `no-referrer`: with `no-referrer` a browser submits the
+    // form with `Origin: null`, which the Origin check above (rightly) refuses,
+    // so Approve and Deny would do nothing. The signed link still never leaves
+    // this server: no Referer is sent to any other origin.
+    res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
@@ -380,12 +384,14 @@ export function createHoldOnApp(options: AppOptions): HoldOnApp {
       res.redirect(303, `/approve/${encodeURIComponent(holdId)}?t=${encodeURIComponent(token)}&done=${decision === 'approve' ? 'approved' : 'denied'}`);
     } catch (error) {
       if (!(error instanceof HoldOnError)) throw error;
-      const message =
+      let message =
         error.code === 'payee_not_verified'
           ? 'To approve a payee that is not in the official registry, tick the box saying you personally know and trust them. Otherwise choose Deny.'
           : error.message;
       try {
         const hold = service.familyHold(principal, holdId);
+        // The page lists the reasons one by one; do not repeat them here as a paragraph.
+        if (error.code === 'blocked' && hold.blocked) message = 'This request was stopped and cannot be approved. The reasons are listed below.';
         res.status(409).type('html').send(renderApprovalPage(service.familyHoldView(hold, principal.user_id), { token, error: message }));
       } catch {
         res.status(404).type('html').send(renderMessagePage('Request not found', message, 'caution'));

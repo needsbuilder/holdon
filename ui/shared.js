@@ -3,7 +3,11 @@
 // Every card is a small, self-contained page that a host renders in a sandboxed
 // iframe. Safety rules for this file:
 //   - text is only ever written with textContent, never as HTML
-//   - nothing is rendered as a link, and nothing loads from the network
+//   - nothing loads from the network
+//   - the only links are official source links on the trusted contact's card
+//     (https pages cited in the rules and registry files), and they are opened
+//     by asking the host, never by navigating the card. Nothing that came from
+//     a suspicious message is ever a link, and the older adult's cards have none
 //   - the cards only show what the server returned for this person's role
 //
 // The cards talk to the host with the MCP Apps protocol (JSON-RPC 2.0 over
@@ -77,7 +81,10 @@ export async function connectHost({ name, version, onToolResult }) {
 
   return {
     hostContext: initialized?.hostContext,
+    hostCapabilities: initialized?.hostCapabilities ?? {},
     callTool: (tool, args) => request('tools/call', { name: tool, arguments: args }),
+    // MCP Apps `ui/open-link`: the host decides whether and how to open it.
+    openLink: (url) => request('ui/open-link', { url }),
   };
 }
 
@@ -135,6 +142,42 @@ export function when(iso) {
   return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/** "consumer.ftc.gov" for "https://consumer.ftc.gov/articles/...": a short, honest label for a source link. */
+export function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A link to an official source, labelled with its website. Only https pages
+ * are linked, and only when the host can open links; otherwise the website is
+ * shown as plain text. The card itself never navigates.
+ */
+export function sourceLink(source, api) {
+  const site = source?.url ? hostOf(source.url) : undefined;
+  if (!site) return undefined;
+  const name = [source.publisher, source.title].filter(Boolean).join(', ');
+  if (!api.canOpenLinks || !/^https:\/\//.test(source.url)) return el('span', { class: 'source', title: name }, site);
+  return el(
+    'a',
+    {
+      class: 'source',
+      href: source.url,
+      rel: 'noreferrer noopener',
+      title: name,
+      'aria-label': `Source: ${name || site}`,
+      onclick: (event) => {
+        event.preventDefault();
+        api.openLink(source.url).catch(() => undefined);
+      },
+    },
+    site,
+  );
+}
+
 /** A two-column list of facts; rows without a value are left out. */
 export function facts(rows) {
   const list = el('dl', { class: 'facts' });
@@ -162,6 +205,10 @@ export async function start(name, render) {
   let host;
   const api = {
     call: (tool, args) => host.callTool(tool, args),
+    openLink: (url) => host.openLink(url),
+    get canOpenLinks() {
+      return Boolean(host?.hostCapabilities?.openLinks);
+    },
     show,
   };
 

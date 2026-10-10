@@ -152,6 +152,16 @@ describe('verifyPayee', () => {
     const result = verifyPayee(registry, [], { name: 'Con Edison', payment_method: 'zelle' });
     expect(result.mismatches[0]).toMatchObject({ field: 'payment_method', code: 'method_never_used', severity: 'high' });
     expect(result.mismatches[0]?.source?.url).toContain('coned.com');
+    // `fact` is the registry's own summary, copied as it is, for showing as a short list item.
+    const never = registry.byId.get('con-edison')!.never_methods[0]!;
+    expect(result.mismatches[0]?.fact).toBe(never.summary);
+  });
+
+  it('gives a plain comparison no registry fact of its own', () => {
+    expect(verifyPayee(registry, [], { name: 'IRS', phone: '888-555-0142' }).mismatches[0]?.fact).toBeUndefined();
+    expect(verifyPayee(registry, [], { name: 'IRS', url: 'https://irs-pay.example.com' }).mismatches[0]?.fact).toBeUndefined();
+    const ftc = verifyPayee(registry, [], { name: 'FTC' }).mismatches[0]!;
+    expect(ftc.fact).toBe(registry.byId.get('ftc')!.contact_facts[0]!.summary);
   });
 
   it('treats any request to pay the FTC as a mismatch, because the FTC never asks for money', () => {
