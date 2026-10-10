@@ -1,0 +1,29 @@
+{
+  "about": "Demo data for local development and the hackathon demo. The tokens below are public demo values, not secrets: anyone can read them here. A real deployment would use OAuth as described in the MCP authorization specification, not static tokens.",
+  "circle": {
+    "id": "circle_ellis",
+    "name": "Ellis family"
+  },
+  "users": [
+    {
+      "id": "user_margaret",
+      "name": "Margaret Ellis",
+      "role": "member",
+      "token": "demo-member-margaret"
+    },
+    {
+      "id": "user_sarah",
+      "name": "Sarah Ellis",
+      "role": "contact",
+      "relationship": "daughter",
+      "token": "demo-contact-sarah"
+    }
+  ],
+  "policy": {
+    "approval_threshold_usd": 100,
+    "blocked_methods_official_payees": [],
+    "blocked_methods_all_payees": [],
+    "hold_expiry_hours": 24,
+    "notify_on_stop": true
+  }
+}

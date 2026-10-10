@@ -363,6 +363,20 @@
           "source_url": "https://consumer.ftc.gov/articles/how-avoid-government-impersonation-scam",
           "quote": "The FTC will never ask you for money, threaten to arrest you, or promise you a prize.",
           "checked": "2026-10-11"
+        },
+        {
+          "id": "ftc-never-contacts-for-money-or-account-numbers",
+          "summary": "The real FTC never contacts people to ask for money or for Social Security, bank account or card numbers.",
+          "source_url": "https://consumer.ftc.gov/articles/how-avoid-government-impersonation-scam",
+          "quote": "The real FTC will never contact you and ask for money or information like your Social Security, bank account, or credit card number.",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "ftc-refunds-are-sent-not-paid-for",
+          "summary": "Refunds from FTC cases are sent to people by check, prepaid debit card or PayPal; there is nothing to pay to receive one.",
+          "source_url": "https://consumer.ftc.gov/articles/how-avoid-government-impersonation-scam",
+          "quote": "If you’re getting a refund or payment from an FTC case, you’ll get it by check, prepaid debit card, or PayPal.",
+          "checked": "2026-10-11"
         }
       ]
     },

@@ -18,18 +18,20 @@
     "government": ["irs", "internal revenue", "internal revenue service", "social security", "social security administration", "ssa", "medicare", "ftc", "federal trade commission", "fbi", "dea", "federal agent", "federal officer", "government", "government agency", "treasury department", "homeland security", "customs and border protection", "border patrol", "immigration", "uscis", "sheriff", "sheriffs office", "police department", "police officer", "us marshal", "us marshals", "district attorney", "court clerk", "court official", "county court", "federal court", "jury duty", "tax office", "tax agent"],
     "utility": ["electric company", "electric bill", "electricity bill", "power company", "power bill", "gas company", "gas bill", "water company", "water bill", "utility", "utility company", "utility bill", "utilities", "light bill"],
     "legal_threat": ["arrest", "arrested", "warrant", "jail", "prison", "deport", "deported", "deportation", "lawsuit", "sue me", "sued", "legal action", "suspend", "suspended", "suspension", "revoke", "revoked", "frozen", "freeze my", "seize", "seized", "prosecute", "prosecuted", "badge number", "criminal charges"],
-    "secrecy": ["dont tell", "do not tell", "not to tell", "not tell anyone", "cant tell anyone", "cannot tell anyone", "keep it secret", "keep it a secret", "keep this secret", "keep this a secret", "keep it quiet", "keep this quiet", "keep it between us", "keep this between us", "just between us", "secret", "nobody can know", "no one can know", "dont talk to", "do not talk to", "not to talk to", "without telling", "gag order"],
+    "secrecy": ["not to tell", "dont tell anyone", "do not tell anyone", "not tell anyone", "cant tell anyone", "cannot tell anyone", "dont tell my", "do not tell my", "dont tell his", "do not tell his", "dont tell her", "do not tell her", "dont tell your", "do not tell your", "dont tell mom", "dont tell dad", "dont tell the bank", "do not tell the bank", "dont tell the cashier", "do not tell the cashier", "keep it secret", "keep it a secret", "keep this secret", "keep this a secret", "keep it quiet", "keep this quiet", "keep it between us", "keep this between us", "just between us", "nobody can know", "no one can know", "not to talk to", "gag order"],
     "family_member": ["grandson", "granddaughter", "grandchild", "grandchildren", "grandkid", "grandkids", "nephew", "niece", "my son", "my daughter", "my brother", "my sister", "cousin", "family member", "relative", "loved one"],
     "emergency": ["bail", "bail bond", "bail bondsman", "in jail", "jail", "arrested", "accident", "car accident", "car wreck", "hospital", "emergency", "lawyer", "attorney", "public defender", "stranded", "in trouble", "kidnapped", "ransom"],
-    "tech_support": ["tech support", "technical support", "computer support", "customer support technician", "microsoft", "apple support", "geek squad", "computer", "laptop", "virus", "malware", "hacked", "hackers", "antivirus", "norton", "mcafee", "security alert", "security warning"],
-    "remote_access": ["remote access", "remote control", "remotely", "anydesk", "teamviewer", "screen share", "screen sharing", "share my screen", "control of my computer", "into my computer", "pop up", "popup", "pop up warning"],
-    "overpayment": ["overpaid", "overpayment", "over payment", "refunded too much", "refund too much", "refunded me too much", "too much money", "sent too much", "sent me too much", "send back the difference", "send the difference", "pay back the difference", "refund the difference", "refund the balance", "send the rest back", "send back the rest", "send back the extra", "send the extra back", "return the extra", "accidentally refunded", "refund by mistake"],
+    "tech_support": ["tech support", "technical support", "computer support", "support technician", "computer technician", "microsoft", "apple support", "geek squad", "norton", "mcafee", "antivirus company"],
+    "remote_access": ["remote access", "anydesk", "teamviewer", "screen share", "screen sharing", "share my screen", "control of my computer", "access to my computer", "into my computer", "pop up warning", "pop up message", "pop up said", "pop up says", "pop up on my", "popup warning", "popup message", "popup on my", "popup said", "popup says"],
+    "overpayment": ["overpaid me", "overpaid by", "refunded too much", "refund too much", "refunded me too much", "sent too much", "sent me too much", "paid me too much", "check for too much", "check was for more", "send back the difference", "send the difference", "pay back the difference", "refund the difference", "refund the balance", "send the rest back", "send back the rest", "send back the extra", "send the extra back", "return the extra", "send back part", "wire back", "accidentally refunded", "refund by mistake"],
     "prize": ["prize", "prizes", "lottery", "sweepstakes", "jackpot", "winnings", "winner", "i won", "you won", "have won", "publishers clearing house", "inheritance", "free cruise", "free vacation"],
     "upfront_fee": ["fee", "fees", "tax", "taxes", "processing", "shipping and handling", "customs duties", "customs", "insurance", "to claim", "to release", "to collect", "up front", "upfront"],
     "medicare_card": ["new medicare card", "medicare card fee", "pay for my medicare card", "pay for a medicare card", "pay for the medicare card", "pay for your medicare card", "replacement medicare card", "upgraded medicare card", "plastic medicare card", "medicare card is expiring", "medicare card expired", "medicare card has expired", "activate my medicare card", "activate your medicare card", "renew my medicare card"],
     "shutoff": ["shut off", "shutoff", "shut my", "cut off", "cut my power", "cut my service", "disconnect", "disconnected", "disconnection", "turn off my", "turned off", "lights off"],
-    "protect_money": ["safe account", "secure account", "protected account", "protect my money", "protect your money", "protect my savings", "protect it", "move my money", "move your money", "move my savings", "transfer my savings", "safety locker", "federal safety locker", "gold bars", "buy gold", "courier", "pick up the cash", "pick up cash", "withdraw cash", "safekeeping", "safe keeping"],
-    "pressure": ["immediately", "right now", "right away", "within the hour", "in an hour", "in one hour", "in 30 minutes", "in thirty minutes", "urgent", "urgently", "act now", "last chance", "final notice", "before midnight", "or else", "stay on the phone", "dont hang up", "do not hang up", "hurry", "asap"]
+    "protect_money": ["safe account", "secure account", "protected account", "protect my money", "protect your money", "protect my savings", "keep my money safe", "keep your money safe", "move my money to a", "move your money to a", "move my savings to", "transfer my savings to", "safety locker", "federal safety locker", "gold bars", "gold bullion", "courier will pick up", "courier to pick up", "send a courier", "give it to a courier", "hand it to a courier", "pick up the cash", "pick up cash", "for safekeeping", "for safe keeping"],
+    "pressure": ["immediately", "right now", "right away", "within the hour", "in an hour", "in one hour", "in 30 minutes", "in thirty minutes", "urgent", "urgently", "act now", "last chance", "final notice", "before midnight", "or else", "stay on the phone", "dont hang up", "do not hang up", "hurry", "asap"],
+    "gift_occasion": ["birthday", "christmas", "hanukkah", "holiday gift", "graduation", "wedding", "anniversary", "baby shower", "mothers day", "fathers day", "valentines", "as a gift", "as a present", "a gift for", "a present for", "gift for my", "present for my", "stocking stuffer", "thank you gift", "retirement gift"],
+    "computer_problem": ["virus", "viruses", "malware", "hacked", "hackers", "infected", "security alert", "security warning", "computer problem", "problem with my computer", "problem with your computer", "computer is locked", "locked my computer", "computer was compromised", "account was compromised"]
   },
   "patterns": [
     {
@@ -37,7 +39,25 @@
       "label": "Asked to pay with gift cards or a prepaid card",
       "severity": "high",
       "why": "Gift cards are for gifts. Real businesses and government agencies do not ask to be paid with them.",
-      "when": { "any": [{ "method_in": ["gift_card"] }, { "text": "gift_card" }] },
+      "when": {
+        "any": [
+          {
+            "method_in": ["gift_card"]
+          },
+          {
+            "all": [
+              {
+                "text": "gift_card"
+              },
+              {
+                "not": {
+                  "text": "gift_occasion"
+                }
+              }
+            ]
+          }
+        ]
+      },
       "guidance": [
         {
           "publisher": "Federal Trade Commission",
@@ -69,12 +89,20 @@
       "why": "Government agencies do not call, text or email to demand money, and they do not threaten arrest over the phone.",
       "when": {
         "all": [
-          { "payee_category_in": ["government"] },
+          {
+            "payee_category_in": ["government"]
+          },
           {
             "any": [
-              { "claim_in": ["arrest_or_legal_threat", "account_or_benefits_suspended"] },
-              { "text": "legal_threat" },
-              { "channel_in": ["phone_call", "text", "email"] }
+              {
+                "claim_in": ["arrest_or_legal_threat", "account_or_benefits_suspended"]
+              },
+              {
+                "text": "legal_threat"
+              },
+              {
+                "channel_in": ["phone_call", "text", "email"]
+              }
             ]
           }
         ]
@@ -116,7 +144,16 @@
       "label": "Told to keep the payment secret",
       "severity": "high",
       "why": "Being told not to tell family or friends is a strong warning sign. Honest requests can be talked over with someone you trust.",
-      "when": { "any": [{ "flag": "secrecy_requested" }, { "text": "secrecy" }] },
+      "when": {
+        "any": [
+          {
+            "flag": "secrecy_requested"
+          },
+          {
+            "text": "secrecy"
+          }
+        ]
+      },
       "guidance": [
         {
           "publisher": "Federal Trade Commission",
@@ -140,7 +177,16 @@
       "label": "Asked to pay with cryptocurrency or at a crypto ATM",
       "severity": "high",
       "why": "Being told to pay someone in cryptocurrency, or to put cash into a crypto ATM, is a known scam pattern.",
-      "when": { "any": [{ "method_in": ["crypto"] }, { "text": "crypto" }] },
+      "when": {
+        "any": [
+          {
+            "method_in": ["crypto"]
+          },
+          {
+            "text": "crypto"
+          }
+        ]
+      },
       "guidance": [
         {
           "publisher": "Federal Trade Commission",
@@ -172,8 +218,19 @@
       "why": "Scammers imitate relatives who need bail or emergency money. Checking with another family member first is the recommended step.",
       "when": {
         "any": [
-          { "claim_in": ["family_emergency"] },
-          { "all": [{ "text": "family_member" }, { "text": "emergency" }] }
+          {
+            "claim_in": ["family_emergency"]
+          },
+          {
+            "all": [
+              {
+                "text": "family_member"
+              },
+              {
+                "text": "emergency"
+              }
+            ]
+          }
         ]
       },
       "guidance": [
@@ -213,13 +270,35 @@
       "severity": "high",
       "why": "Real tech companies do not contact people out of the blue about a computer problem, and real warnings do not ask you to call a number.",
       "when": {
-        "all": [
-          { "text": "tech_support" },
+        "any": [
           {
-            "any": [
-              { "text": "remote_access" },
-              { "claim_in": ["computer_or_account_compromised"] },
-              { "channel_in": ["phone_call", "text", "email", "website"] }
+            "text": "remote_access"
+          },
+          {
+            "all": [
+              {
+                "text": "computer_problem"
+              },
+              {
+                "channel_in": ["phone_call", "text", "email", "website"]
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "text": "tech_support"
+              },
+              {
+                "any": [
+                  {
+                    "claim_in": ["computer_or_account_compromised"]
+                  },
+                  {
+                    "channel_in": ["phone_call"]
+                  }
+                ]
+              }
             ]
           }
         ]
@@ -253,7 +332,9 @@
       "label": "Asked to send back an overpayment or an accidental refund",
       "severity": "high",
       "why": "Being sent too much money and asked to return the difference is a known scam. The original payment usually turns out to be fake.",
-      "when": { "text": "overpayment" },
+      "when": {
+        "text": "overpayment"
+      },
       "guidance": [
         {
           "publisher": "Federal Trade Commission",
@@ -273,7 +354,7 @@
           "publisher": "FBI Internet Crime Complaint Center",
           "title": "2025 IC3 Annual Report, Appendix B: Definitions",
           "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
-          "quote": "An individual is sent a payment/commission and is instructed to keep a portion of the payment and send the remainder to another individual or business.",
+          "quote": "An individual is sent a payment/commission and is instructed to keep a portion of the payment and send the remainder to another individual",
           "checked": "2026-10-11"
         }
       ]
@@ -285,8 +366,19 @@
       "why": "Real prizes are free. Being asked to pay fees or taxes first to collect winnings is a known scam pattern.",
       "when": {
         "all": [
-          { "text": "prize" },
-          { "any": [{ "text": "upfront_fee" }, { "method_in": ["gift_card", "wire", "crypto", "payment_app", "zelle", "cash"] }] }
+          {
+            "text": "prize"
+          },
+          {
+            "any": [
+              {
+                "text": "upfront_fee"
+              },
+              {
+                "method_in": ["gift_card", "wire", "crypto", "payment_app", "zelle", "cash"]
+              }
+            ]
+          }
         ]
       },
       "guidance": [
@@ -318,7 +410,9 @@
       "label": "Asked to pay for a Medicare card",
       "severity": "high",
       "why": "Medicare cards are sent automatically and free of charge. Medicare does not call to sell anything or charge for a card.",
-      "when": { "text": "medicare_card" },
+      "when": {
+        "text": "medicare_card"
+      },
       "guidance": [
         {
           "publisher": "Federal Trade Commission",
@@ -343,9 +437,22 @@
       "why": "Real utility companies do not call, text or visit to demand immediate payment to avoid a same-day shutoff.",
       "when": {
         "all": [
-          { "payee_category_in": ["utility"] },
-          { "any": [{ "claim_in": ["service_shutoff"] }, { "text": "shutoff" }] },
-          { "channel_in": ["phone_call", "text", "email", "in_person"] }
+          {
+            "payee_category_in": ["utility"]
+          },
+          {
+            "any": [
+              {
+                "claim_in": ["service_shutoff"]
+              },
+              {
+                "text": "shutoff"
+              }
+            ]
+          },
+          {
+            "channel_in": ["phone_call", "text", "email", "in_person"]
+          }
         ]
       },
       "guidance": [
@@ -377,7 +484,9 @@
       "label": "Told to move money or hand over cash or gold to keep it safe",
       "severity": "high",
       "why": "No government agency or bank asks people to move savings to a safe account, or to hand cash or gold to a courier.",
-      "when": { "text": "protect_money" },
+      "when": {
+        "text": "protect_money"
+      },
       "guidance": [
         {
           "publisher": "Federal Trade Commission",
@@ -409,7 +518,16 @@
       "label": "Pressure to pay right away",
       "severity": "medium",
       "why": "Being rushed is a common warning sign. Honest businesses give people time to think and to ask someone they trust.",
-      "when": { "any": [{ "claim_in": ["pay_immediately", "limited_time_offer"] }, { "text": "pressure" }] },
+      "when": {
+        "any": [
+          {
+            "claim_in": ["pay_immediately", "limited_time_offer"]
+          },
+          {
+            "text": "pressure"
+          }
+        ]
+      },
       "guidance": [
         {
           "publisher": "Federal Trade Commission",
