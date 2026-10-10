@@ -1,0 +1,41 @@
+{
+  "name": "holdon-mcp",
+  "version": "0.1.0",
+  "description": "Hold On: a money-safety MCP server and Agent Skill for voice assistants used by older adults. Checks payment requests against official scam guidance, verifies payees, and routes money decisions to a trusted family contact. All payments are simulated.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "holdon": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "seed": "tsx src/seed.ts",
+    "seed:reset": "tsx src/seed.ts --reset",
+    "demo": "tsx src/seed.ts --reset && tsx src/index.ts",
+    "verify:sources": "node scripts/verify-sources.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/express": "^2.0.2",
+    "@modelcontextprotocol/node": "^2.1.1",
+    "@modelcontextprotocol/server": "^2.3.1",
+    "express": "^5.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

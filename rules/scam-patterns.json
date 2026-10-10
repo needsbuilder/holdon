@@ -1,0 +1,445 @@
+{
+  "version": "2026-10-11",
+  "about": "Scam patterns published by official US sources, expressed as machine-checkable conditions. Each pattern carries the official guidance it is based on: page URL, a short verbatim quote, and the date the page was read. The rule engine evaluates these conditions deterministically; no language model is involved in a verdict.",
+  "condition_language": {
+    "all": "every sub-condition matches",
+    "any": "at least one sub-condition matches",
+    "not": "the sub-condition does not match",
+    "method_in": "payment_method is one of the listed values",
+    "channel_in": "contact_channel is one of the listed values",
+    "claim_in": "urgency_claims contains one of the listed values",
+    "flag": "the named boolean input is true",
+    "payee_category_in": "the named payee resolves to a registry entry in one of these categories, or the request text uses words from the matching lexicon",
+    "text": "the description, summary or payee name contains a whole-word phrase from the named lexicon"
+  },
+  "lexicons": {
+    "gift_card": ["gift card", "gift cards", "giftcard", "giftcards", "prepaid card", "prepaid cards", "prepaid debit card", "prepaid debit cards", "google play card", "google play cards", "apple gift card", "apple gift cards", "itunes card", "itunes cards", "steam card", "steam cards", "moneypak", "money pak", "green dot", "vanilla card", "vanilla cards", "reload card", "numbers on the back of the card"],
+    "crypto": ["bitcoin", "bitcoins", "cryptocurrency", "crypto", "btc", "ethereum", "tether", "usdt", "bitcoin atm", "crypto atm", "bitcoin machine", "bitcoin kiosk", "crypto kiosk", "crypto wallet", "wallet address"],
+    "government": ["irs", "internal revenue", "internal revenue service", "social security", "social security administration", "ssa", "medicare", "ftc", "federal trade commission", "fbi", "dea", "federal agent", "federal officer", "government", "government agency", "treasury department", "homeland security", "customs and border protection", "border patrol", "immigration", "uscis", "sheriff", "sheriffs office", "police department", "police officer", "us marshal", "us marshals", "district attorney", "court clerk", "court official", "county court", "federal court", "jury duty", "tax office", "tax agent"],
+    "utility": ["electric company", "electric bill", "electricity bill", "power company", "power bill", "gas company", "gas bill", "water company", "water bill", "utility", "utility company", "utility bill", "utilities", "light bill"],
+    "legal_threat": ["arrest", "arrested", "warrant", "jail", "prison", "deport", "deported", "deportation", "lawsuit", "sue me", "sued", "legal action", "suspend", "suspended", "suspension", "revoke", "revoked", "frozen", "freeze my", "seize", "seized", "prosecute", "prosecuted", "badge number", "criminal charges"],
+    "secrecy": ["dont tell", "do not tell", "not to tell", "not tell anyone", "cant tell anyone", "cannot tell anyone", "keep it secret", "keep it a secret", "keep this secret", "keep this a secret", "keep it quiet", "keep this quiet", "keep it between us", "keep this between us", "just between us", "secret", "nobody can know", "no one can know", "dont talk to", "do not talk to", "not to talk to", "without telling", "gag order"],
+    "family_member": ["grandson", "granddaughter", "grandchild", "grandchildren", "grandkid", "grandkids", "nephew", "niece", "my son", "my daughter", "my brother", "my sister", "cousin", "family member", "relative", "loved one"],
+    "emergency": ["bail", "bail bond", "bail bondsman", "in jail", "jail", "arrested", "accident", "car accident", "car wreck", "hospital", "emergency", "lawyer", "attorney", "public defender", "stranded", "in trouble", "kidnapped", "ransom"],
+    "tech_support": ["tech support", "technical support", "computer support", "customer support technician", "microsoft", "apple support", "geek squad", "computer", "laptop", "virus", "malware", "hacked", "hackers", "antivirus", "norton", "mcafee", "security alert", "security warning"],
+    "remote_access": ["remote access", "remote control", "remotely", "anydesk", "teamviewer", "screen share", "screen sharing", "share my screen", "control of my computer", "into my computer", "pop up", "popup", "pop up warning"],
+    "overpayment": ["overpaid", "overpayment", "over payment", "refunded too much", "refund too much", "refunded me too much", "too much money", "sent too much", "sent me too much", "send back the difference", "send the difference", "pay back the difference", "refund the difference", "refund the balance", "send the rest back", "send back the rest", "send back the extra", "send the extra back", "return the extra", "accidentally refunded", "refund by mistake"],
+    "prize": ["prize", "prizes", "lottery", "sweepstakes", "jackpot", "winnings", "winner", "i won", "you won", "have won", "publishers clearing house", "inheritance", "free cruise", "free vacation"],
+    "upfront_fee": ["fee", "fees", "tax", "taxes", "processing", "shipping and handling", "customs duties", "customs", "insurance", "to claim", "to release", "to collect", "up front", "upfront"],
+    "medicare_card": ["new medicare card", "medicare card fee", "pay for my medicare card", "pay for a medicare card", "pay for the medicare card", "pay for your medicare card", "replacement medicare card", "upgraded medicare card", "plastic medicare card", "medicare card is expiring", "medicare card expired", "medicare card has expired", "activate my medicare card", "activate your medicare card", "renew my medicare card"],
+    "shutoff": ["shut off", "shutoff", "shut my", "cut off", "cut my power", "cut my service", "disconnect", "disconnected", "disconnection", "turn off my", "turned off", "lights off"],
+    "protect_money": ["safe account", "secure account", "protected account", "protect my money", "protect your money", "protect my savings", "protect it", "move my money", "move your money", "move my savings", "transfer my savings", "safety locker", "federal safety locker", "gold bars", "buy gold", "courier", "pick up the cash", "pick up cash", "withdraw cash", "safekeeping", "safe keeping"],
+    "pressure": ["immediately", "right now", "right away", "within the hour", "in an hour", "in one hour", "in 30 minutes", "in thirty minutes", "urgent", "urgently", "act now", "last chance", "final notice", "before midnight", "or else", "stay on the phone", "dont hang up", "do not hang up", "hurry", "asap"]
+  },
+  "patterns": [
+    {
+      "id": "gift-card-payment-demand",
+      "label": "Asked to pay with gift cards or a prepaid card",
+      "severity": "high",
+      "why": "Gift cards are for gifts. Real businesses and government agencies do not ask to be paid with them.",
+      "when": { "any": [{ "method_in": ["gift_card"] }, { "text": "gift_card" }] },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "Avoiding and Reporting Gift Card Scams",
+          "source_url": "https://consumer.ftc.gov/articles/avoiding-and-reporting-gift-card-scams",
+          "quote": "No real business or government agency will ever tell you to buy a gift card to pay them.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Internal Revenue Service",
+          "title": "Taxpayers shouldn’t let gift card scammers ruin the holidays",
+          "source_url": "https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays",
+          "quote": "the IRS never asks for or accepts gift cards as payment for a tax bill",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Consumer Financial Protection Bureau",
+          "title": "What are some classic warning signs of possible fraud and scams?",
+          "source_url": "https://www.consumerfinance.gov/ask-cfpb/what-are-some-classic-warning-signs-of-possible-fraud-and-scams-en-2094/",
+          "quote": "Tells you to send money using methods like wire transfers, cryptocurrency, payment apps, prepaid cards, or gift cards.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "government-impersonation-demand",
+      "label": "Someone claiming to be from the government is demanding money",
+      "severity": "high",
+      "why": "Government agencies do not call, text or email to demand money, and they do not threaten arrest over the phone.",
+      "when": {
+        "all": [
+          { "payee_category_in": ["government"] },
+          {
+            "any": [
+              { "claim_in": ["arrest_or_legal_threat", "account_or_benefits_suspended"] },
+              { "text": "legal_threat" },
+              { "channel_in": ["phone_call", "text", "email"] }
+            ]
+          }
+        ]
+      },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "How To Avoid a Government Impersonation Scam",
+          "source_url": "https://consumer.ftc.gov/articles/how-avoid-government-impersonation-scam",
+          "quote": "Government agencies will never call, email, text, or message you on social media to ask for money or personal information.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Social Security Administration",
+          "title": "What should I do if I receive a call from someone claiming to be a Social Security employee?",
+          "source_url": "https://www.ssa.gov/faqs/en/questions/KA-10018.html",
+          "quote": "Threaten you with arrest of legal action.",
+          "quote_context": "But we will never:",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Internal Revenue Service",
+          "title": "How to know it’s the IRS",
+          "source_url": "https://www.irs.gov/help/how-to-know-its-the-irs",
+          "quote": "We normally contact you the first time by mail delivered by the U.S. Postal Service.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "FBI Internet Crime Complaint Center",
+          "title": "2025 IC3 Annual Report, Appendix B: Definitions",
+          "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+          "quote": "Government Impersonation: A government official is impersonated to collect or extort money.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "keep-it-secret",
+      "label": "Told to keep the payment secret",
+      "severity": "high",
+      "why": "Being told not to tell family or friends is a strong warning sign. Honest requests can be talked over with someone you trust.",
+      "when": { "any": [{ "flag": "secrecy_requested" }, { "text": "secrecy" }] },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "Scammers Use Fake Emergencies To Steal Your Money",
+          "source_url": "https://consumer.ftc.gov/articles/scammers-use-fake-emergencies-steal-your-money",
+          "quote": "The scammer might tell you it’s important to keep it secret.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Social Security Administration",
+          "title": "Protect Yourself from Scams",
+          "source_url": "https://www.ssa.gov/scam/",
+          "quote": "Demand secrecy.",
+          "quote_context": "Scammers will:",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "crypto-atm-payment",
+      "label": "Asked to pay with cryptocurrency or at a crypto ATM",
+      "severity": "high",
+      "why": "Being told to pay someone in cryptocurrency, or to put cash into a crypto ATM, is a known scam pattern.",
+      "when": { "any": [{ "method_in": ["crypto"] }, { "text": "crypto" }] },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "What To Know About Cryptocurrency and Scams",
+          "source_url": "https://consumer.ftc.gov/articles/what-know-about-cryptocurrency-and-scams",
+          "quote": "Only scammers demand payment in cryptocurrency.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "What To Know About Cryptocurrency and Scams",
+          "source_url": "https://consumer.ftc.gov/articles/what-know-about-cryptocurrency-and-scams",
+          "quote": "Some scammers even stay on the phone with you as they direct you to a cryptocurrency ATM",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "FBI Internet Crime Complaint Center",
+          "title": "2025 IC3 Annual Report: Cryptocurrency ATMs/Kiosks",
+          "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+          "quote": "13,460 Complaints; $389 million in Losses",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "family-emergency-bail",
+      "label": "Urgent money for a family member in trouble",
+      "severity": "medium",
+      "why": "Scammers imitate relatives who need bail or emergency money. Checking with another family member first is the recommended step.",
+      "when": {
+        "any": [
+          { "claim_in": ["family_emergency"] },
+          { "all": [{ "text": "family_member" }, { "text": "emergency" }] }
+        ]
+      },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "Scammers Use Fake Emergencies To Steal Your Money",
+          "source_url": "https://consumer.ftc.gov/articles/scammers-use-fake-emergencies-steal-your-money",
+          "quote": "Resist the pressure to react and send money immediately.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "Scammers Use Fake Emergencies To Steal Your Money",
+          "source_url": "https://consumer.ftc.gov/articles/scammers-use-fake-emergencies-steal-your-money",
+          "quote": "Call someone else in your family or circle of friends, even if the caller said to keep it a secret",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "FBI Internet Crime Complaint Center",
+          "title": "2025 IC3 Annual Report",
+          "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+          "quote": "grandparent scams, or “distress” scams, in which voice cloning technology is used to mimic the sound of a loved one in distress",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Consumer Financial Protection Bureau",
+          "title": "What are some classic warning signs of possible fraud and scams?",
+          "source_url": "https://www.consumerfinance.gov/ask-cfpb/what-are-some-classic-warning-signs-of-possible-fraud-and-scams-en-2094/",
+          "quote": "Beware when someone plays on your emotions or claims there’s an urgent situation.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "tech-support-remote-access",
+      "label": "Unexpected tech support asking for payment or remote access",
+      "severity": "high",
+      "why": "Real tech companies do not contact people out of the blue about a computer problem, and real warnings do not ask you to call a number.",
+      "when": {
+        "all": [
+          { "text": "tech_support" },
+          {
+            "any": [
+              { "text": "remote_access" },
+              { "claim_in": ["computer_or_account_compromised"] },
+              { "channel_in": ["phone_call", "text", "email", "website"] }
+            ]
+          }
+        ]
+      },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "How To Spot, Avoid, and Report Tech Support Scams",
+          "source_url": "https://consumer.ftc.gov/articles/how-spot-avoid-and-report-tech-support-scams",
+          "quote": "Legitimate tech companies won’t contact you by phone, email, or text message to tell you there’s a problem with your computer.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "How To Spot, Avoid, and Report Tech Support Scams",
+          "source_url": "https://consumer.ftc.gov/articles/how-spot-avoid-and-report-tech-support-scams",
+          "quote": "Real security pop-up warnings and messages will never ask you to call a phone number.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "FBI Internet Crime Complaint Center",
+          "title": "2025 IC3 Annual Report, Appendix B: Definitions",
+          "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+          "quote": "Tech/Customer Support Fraud: Subject posing as technical or customer support/service.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "overpayment-refund",
+      "label": "Asked to send back an overpayment or an accidental refund",
+      "severity": "high",
+      "why": "Being sent too much money and asked to return the difference is a known scam. The original payment usually turns out to be fake.",
+      "when": { "text": "overpayment" },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "How To Spot, Avoid, and Report Fake Check Scams",
+          "source_url": "https://consumer.ftc.gov/articles/how-spot-avoid-and-report-fake-check-scams",
+          "quote": "Never use money from a check to send gift cards, money orders, cryptocurrency, or to wire money to anyone who asks you to.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "How To Spot, Avoid, and Report Tech Support Scams",
+          "source_url": "https://consumer.ftc.gov/articles/how-spot-avoid-and-report-tech-support-scams",
+          "quote": "They say they refunded you too much money and insist you pay them back",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "FBI Internet Crime Complaint Center",
+          "title": "2025 IC3 Annual Report, Appendix B: Definitions",
+          "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+          "quote": "An individual is sent a payment/commission and is instructed to keep a portion of the payment and send the remainder to another individual or business.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "prize-lottery-fee",
+      "label": "Asked to pay a fee or taxes to collect a prize",
+      "severity": "high",
+      "why": "Real prizes are free. Being asked to pay fees or taxes first to collect winnings is a known scam pattern.",
+      "when": {
+        "all": [
+          { "text": "prize" },
+          { "any": [{ "text": "upfront_fee" }, { "method_in": ["gift_card", "wire", "crypto", "payment_app", "zelle", "cash"] }] }
+        ]
+      },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "Fake Prize, Sweepstakes, and Lottery Scams",
+          "source_url": "https://consumer.ftc.gov/articles/fake-prize-sweepstakes-and-lottery-scams",
+          "quote": "If you have to pay to get your prize, it’s a scam. Real prizes are free.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Consumer Financial Protection Bureau",
+          "title": "What are some classic warning signs of possible fraud and scams?",
+          "source_url": "https://www.consumerfinance.gov/ask-cfpb/what-are-some-classic-warning-signs-of-possible-fraud-and-scams-en-2094/",
+          "quote": "Never pay up front for a prize or offer. It’s a scam if you are told that you must pay fees or taxes first.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "FBI Internet Crime Complaint Center",
+          "title": "2025 IC3 Annual Report, Appendix B: Definitions",
+          "source_url": "https://www.ic3.gov/AnnualReport/Reports/2025_IC3Report.pdf",
+          "quote": "An individual is contacted about winning a lottery or sweepstakes they never entered",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "medicare-card-fee",
+      "label": "Asked to pay for a Medicare card",
+      "severity": "high",
+      "why": "Medicare cards are sent automatically and free of charge. Medicare does not call to sell anything or charge for a card.",
+      "when": { "text": "medicare_card" },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "How To Avoid a Government Impersonation Scam",
+          "source_url": "https://consumer.ftc.gov/articles/how-avoid-government-impersonation-scam",
+          "quote": "Medicare won’t call, email, text, or message you on social media to sell you anything or tell you to pay for your Medicare card.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Medicare.gov",
+          "title": "Your Medicare card",
+          "source_url": "https://www.medicare.gov/basics/get-started-with-medicare/using-medicare/your-medicare-card",
+          "quote": "Medicare will never call you uninvited and ask you to give us personal or private information.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "utility-shutoff-threat",
+      "label": "Threat to shut off a utility unless paid right away",
+      "severity": "high",
+      "why": "Real utility companies do not call, text or visit to demand immediate payment to avoid a same-day shutoff.",
+      "when": {
+        "all": [
+          { "payee_category_in": ["utility"] },
+          { "any": [{ "claim_in": ["service_shutoff"] }, { "text": "shutoff" }] },
+          { "channel_in": ["phone_call", "text", "email", "in_person"] }
+        ]
+      },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "Scammers Pretend To Be Your Utility Company",
+          "source_url": "https://consumer.ftc.gov/articles/scammers-pretend-be-your-utility-company",
+          "quote": "real utility companies won’t demand immediate payment to avoid same-day disconnection",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "Scammers Pretend To Be Your Utility Company",
+          "source_url": "https://consumer.ftc.gov/articles/scammers-pretend-be-your-utility-company",
+          "quote": "contact your utility company using the number on your bill or the company’s website",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Duke Energy",
+          "title": "10th annual Utility Scam Awareness Day",
+          "source_url": "https://news.duke-energy.com/releases/10th-annual-utility-scam-awareness-day-putting-customers-first-in-the-fight-against-scams",
+          "quote": "Scammers may demand immediate payment or threaten service cut-off, but we will never do that.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "move-money-to-protect-it",
+      "label": "Told to move money or hand over cash or gold to keep it safe",
+      "severity": "high",
+      "why": "No government agency or bank asks people to move savings to a safe account, or to hand cash or gold to a courier.",
+      "when": { "text": "protect_money" },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "How To Spot, Avoid, and Report Tech Support Scams",
+          "source_url": "https://consumer.ftc.gov/articles/how-spot-avoid-and-report-tech-support-scams",
+          "quote": "Someone who works for the government will never tell you to put your money in a federal safety locker.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Social Security Administration",
+          "title": "Protect Yourself from Scams",
+          "source_url": "https://www.ssa.gov/scam/",
+          "quote": "Tell you to move your money to a protected bank account to keep it safe.",
+          "quote_context": "Scammers will:",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Social Security Administration",
+          "title": "Protect Yourself from Scams",
+          "source_url": "https://www.ssa.gov/scam/",
+          "quote": "Meet you in-person to pick up cash, gold bars, or other assets.",
+          "quote_context": "Scammers will:",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "pressure-to-act-now",
+      "label": "Pressure to pay right away",
+      "severity": "medium",
+      "why": "Being rushed is a common warning sign. Honest businesses give people time to think and to ask someone they trust.",
+      "when": { "any": [{ "claim_in": ["pay_immediately", "limited_time_offer"] }, { "text": "pressure" }] },
+      "guidance": [
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "How To Avoid a Scam",
+          "source_url": "https://consumer.ftc.gov/articles/how-avoid-scam",
+          "quote": "Scammers want you to act before you have time to think.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Federal Trade Commission",
+          "title": "How To Avoid a Scam",
+          "source_url": "https://consumer.ftc.gov/articles/how-avoid-scam",
+          "quote": "Honest businesses will give you time to make a decision.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Consumer Financial Protection Bureau",
+          "title": "What are some classic warning signs of possible fraud and scams?",
+          "source_url": "https://www.consumerfinance.gov/ask-cfpb/what-are-some-classic-warning-signs-of-possible-fraud-and-scams-en-2094/",
+          "quote": "Pressures you to act right away by telling you the deal won’t last, or doesn’t give you time to ask questions.",
+          "checked": "2026-10-11"
+        },
+        {
+          "publisher": "Social Security Administration",
+          "title": "Protect Yourself from Scams",
+          "source_url": "https://www.ssa.gov/scam/",
+          "quote": "Take a deep breath and talk to someone you trust.",
+          "checked": "2026-10-11"
+        }
+      ]
+    }
+  ]
+}

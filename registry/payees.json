@@ -1,0 +1,835 @@
+{
+  "version": "2026-10-11",
+  "about": "Official payment and contact facts for a small set of US payees. Every fact was read on the organisation's own website on the date in `checked`, and carries the page URL plus a short verbatim quote. Anything that could not be fetched and confirmed was left out. This is a demo registry, not a complete directory.",
+  "method_vocabulary_note": "`gift_card` covers gift cards and prepaid/reloadable cards (for example MoneyPak or Green Dot). `payment_app` covers apps such as Venmo, Cash App and PayPal; `zelle` is listed separately. `bank_transfer` means paying from a checking or savings account. `card` means a credit or debit card.",
+  "payees": [
+    {
+      "id": "irs",
+      "name": "Internal Revenue Service",
+      "aliases": [
+        "IRS",
+        "I.R.S.",
+        "Internal Revenue"
+      ],
+      "category": "government",
+      "official_domains": [
+        {
+          "domain": "irs.gov",
+          "source_url": "https://www.irs.gov/help/tax-scams/recognize-tax-scams-and-fraud",
+          "quote": "Odd or misspelled web links can take you to harmful sites instead of IRS.gov.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [
+        {
+          "label": "Help line for individuals",
+          "number": "800-829-1040",
+          "source_url": "https://www.irs.gov/help/let-us-help-you",
+          "quote": "Individuals 800-829-1040 7 a.m. to 7 p.m. local time",
+          "checked": "2026-10-11"
+        }
+      ],
+      "addresses": [],
+      "accepted_methods": [
+        {
+          "methods": [
+            "bank_transfer",
+            "card"
+          ],
+          "summary": "Federal taxes can be paid from a bank account or by debit or credit card.",
+          "source_url": "https://www.irs.gov/payments",
+          "quote": "Pay your federal taxes by bank account, debit or credit card, digital wallet and more.",
+          "checked": "2026-10-11"
+        },
+        {
+          "methods": [
+            "check"
+          ],
+          "summary": "Checks and money orders are made payable to the U.S. Treasury.",
+          "source_url": "https://www.irs.gov/payments/pay-by-check-or-money-order",
+          "quote": "Make the check, money order or cashier’s check payable to “U.S. Treasury” with the amount in dollars and cents.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "never_methods": [
+        {
+          "methods": [
+            "gift_card"
+          ],
+          "summary": "The IRS never asks for or accepts gift cards for a tax bill.",
+          "source_url": "https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays",
+          "quote": "the IRS never asks for or accepts gift cards as payment for a tax bill",
+          "checked": "2026-10-11"
+        },
+        {
+          "methods": [
+            "gift_card",
+            "wire"
+          ],
+          "summary": "The IRS says it will never call to demand immediate payment by gift card, prepaid debit card or wire transfer.",
+          "source_url": "https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays",
+          "quote": "Call to demand immediate payment using a specific payment method such as a gift card, prepaid debit card or wire transfer.",
+          "quote_context": "The IRS will never:",
+          "checked": "2026-10-11"
+        }
+      ],
+      "contact_facts": [
+        {
+          "id": "irs-first-contact-by-mail",
+          "summary": "The IRS normally makes first contact by postal mail.",
+          "source_url": "https://www.irs.gov/help/how-to-know-its-the-irs",
+          "quote": "We normally contact you the first time by mail delivered by the U.S. Postal Service.",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "irs-text-only-on-opt-in",
+          "summary": "The IRS sends text messages only to people who opted in.",
+          "unsolicited_channels": [
+            "text"
+          ],
+          "source_url": "https://www.irs.gov/help/how-to-know-its-the-irs",
+          "quote": "We send text messages only when you opt in.",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "irs-email-only-on-opt-in",
+          "summary": "The IRS sends email only to people who opted in.",
+          "unsolicited_channels": [
+            "email"
+          ],
+          "source_url": "https://www.irs.gov/help/how-to-know-its-the-irs",
+          "quote": "We email only when you opt in.",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "irs-no-arrest-threats",
+          "summary": "The IRS says it will never threaten to have someone arrested for not paying.",
+          "source_url": "https://www.irs.gov/newsroom/taxpayers-shouldnt-let-gift-card-scammers-ruin-the-holidays",
+          "quote": "Threaten to bring in local police, immigration officers or other law enforcement to have the taxpayer arrested for not paying.",
+          "quote_context": "The IRS will never:",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "ssa",
+      "name": "Social Security Administration",
+      "aliases": [
+        "SSA",
+        "Social Security",
+        "Social Security office",
+        "Social Security Admin"
+      ],
+      "category": "government",
+      "official_domains": [
+        {
+          "domain": "ssa.gov",
+          "source_url": "https://www.ssa.gov/agency/contact/",
+          "quote": "Our website, www.ssa.gov, is the best way to get help.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [
+        {
+          "label": "National 800 number",
+          "number": "1-800-772-1213",
+          "source_url": "https://www.ssa.gov/agency/contact/phone.html",
+          "quote": "You can call us at 1-800-772-1213 between 8:00 a.m. – 7:00 p.m. local time, Monday through Friday.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "addresses": [],
+      "accepted_methods": [],
+      "never_methods": [
+        {
+          "methods": [
+            "cash",
+            "gift_card",
+            "crypto",
+            "wire"
+          ],
+          "summary": "Social Security says it will never require payment by cash, gift card, prepaid debit card, internet currency or wire transfer.",
+          "source_url": "https://www.ssa.gov/faqs/en/questions/KA-10018.html",
+          "quote": "Require payment by cash, gift card, pre-paid debit card, internet currency, or wire transfer.",
+          "quote_context": "But we will never:",
+          "checked": "2026-10-11"
+        }
+      ],
+      "contact_facts": [
+        {
+          "id": "ssa-no-immediate-payment-demands",
+          "summary": "Social Security says it will never demand immediate payment.",
+          "source_url": "https://www.ssa.gov/faqs/en/questions/KA-10018.html",
+          "quote": "Demand immediate payment from you.",
+          "quote_context": "But we will never:",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "ssa-problems-come-by-letter",
+          "summary": "If there is a problem with a Social Security number or record, the agency typically mails a letter.",
+          "source_url": "https://www.ssa.gov/faqs/en/questions/KA-10018.html",
+          "quote": "If there is a problem with your Social Security number or record, we will typically mail you a letter.",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "ssa-no-sensitive-requests-by-email-or-text",
+          "summary": "Social Security does not ask for sensitive information by social media, email or text message.",
+          "unsolicited_channels": [
+            "email",
+            "text"
+          ],
+          "source_url": "https://www.ssa.gov/scam/",
+          "quote": "Social Security will never ask for sensitive or personal information through social media, email, or text message.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "medicare",
+      "name": "Medicare",
+      "aliases": [
+        "Medicare",
+        "CMS",
+        "Centers for Medicare & Medicaid Services",
+        "Centers for Medicare and Medicaid Services",
+        "Medicare Premium Collection Center"
+      ],
+      "category": "government",
+      "official_domains": [
+        {
+          "domain": "medicare.gov",
+          "source_url": "https://www.medicare.gov/basics/reporting-medicare-fraud-and-abuse",
+          "quote": "Create a secure Medicare.gov account to view your Original Medicare claims as soon as they’re processed to help spot mistakes sooner.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [
+        {
+          "label": "1-800-MEDICARE",
+          "number": "1-800-633-4227",
+          "source_url": "https://www.medicare.gov/basics/reporting-medicare-fraud-and-abuse",
+          "quote": "If you suspect fraud call 1-800-MEDICARE (1-800-633-4227)",
+          "checked": "2026-10-11"
+        }
+      ],
+      "addresses": [
+        {
+          "label": "Premium payments by mail",
+          "address": "Medicare Premium Collection Center, PO Box 790355, St. Louis, MO 63179-0355",
+          "source_url": "https://www.medicare.gov/basics/costs/pay-premiums",
+          "quote": "Medicare Premium Collection Center PO Box 790355 St. Louis, MO 63179-0355",
+          "checked": "2026-10-11"
+        }
+      ],
+      "accepted_methods": [
+        {
+          "methods": [
+            "card",
+            "bank_transfer"
+          ],
+          "summary": "Premiums can be paid online through a Medicare account by credit or debit card, HSA card, or checking or savings account.",
+          "source_url": "https://www.medicare.gov/basics/costs/pay-premiums",
+          "quote": "Choose your payment method, like credit/debit card, Health Savings Account (HSA) card, or checking or savings account",
+          "checked": "2026-10-11"
+        },
+        {
+          "methods": [
+            "check",
+            "card"
+          ],
+          "summary": "Premiums can be paid by mail with a check, money order, credit card, debit card or HSA card.",
+          "source_url": "https://www.medicare.gov/basics/costs/pay-premiums",
+          "quote": "Pay by check, money order, credit card, debit card, or Health Savings Account (HSA) card.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "never_methods": [],
+      "contact_facts": [
+        {
+          "id": "medicare-does-not-call-to-sell",
+          "summary": "Medicare says it will never call to sell anything or visit a home.",
+          "unsolicited_channels": [
+            "phone_call",
+            "in_person"
+          ],
+          "source_url": "https://www.medicare.gov/basics/reporting-medicare-fraud-and-abuse",
+          "quote": "Remember that Medicare will never call you to sell you anything or visit you at your home.",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "medicare-hang-up-on-money-calls",
+          "summary": "If a caller asks for money or threatens to cancel benefits, Medicare says to hang up and call 1-800-MEDICARE.",
+          "unsolicited_channels": [
+            "phone_call"
+          ],
+          "source_url": "https://www.medicare.gov/basics/get-started-with-medicare/using-medicare/your-medicare-card",
+          "quote": "If someone calls and asks for your information, for money, or threatens to cancel your health benefits, hang up and call us 1-800-MEDICARE (1-800-633-4227).",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "medicare-pay-only-through-medicare-account",
+          "summary": "Online premium payments should go only through the person's own Medicare account.",
+          "source_url": "https://www.medicare.gov/basics/costs/pay-premiums",
+          "quote": "Use only your Medicare account to pay your premiums.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "usps",
+      "name": "United States Postal Service",
+      "aliases": [
+        "USPS",
+        "U.S. Postal Service",
+        "US Postal Service",
+        "Postal Service",
+        "the post office",
+        "US Post Office"
+      ],
+      "category": "postal",
+      "official_domains": [
+        {
+          "domain": "usps.com",
+          "source_url": "https://www.uspis.gov/news/scam-article/smishing-package-tracking-text-scams",
+          "quote": "visit USPS.com from your mobile device or computer for tracking and additional resources",
+          "checked": "2026-10-11"
+        },
+        {
+          "domain": "uspis.gov",
+          "source_url": "https://www.uspis.gov/news/scam-article/smishing-package-tracking-text-scams",
+          "quote": "To report USPS related smishing, send an email to spam@uspis.gov",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [
+        {
+          "label": "Customer Care Center",
+          "number": "1-800-275-8777",
+          "source_url": "https://www.usps.com/help/contact-us.htm",
+          "quote": "Call: 1-800-ASK-USPS ® (1-800-275-8777)",
+          "checked": "2026-10-11"
+        }
+      ],
+      "addresses": [],
+      "accepted_methods": [],
+      "never_methods": [],
+      "contact_facts": [
+        {
+          "id": "usps-no-unrequested-texts-or-emails",
+          "summary": "USPS does not send texts or emails about a package unless the customer first asked for tracking with a tracking number.",
+          "unsolicited_channels": [
+            "text",
+            "email"
+          ],
+          "source_url": "https://www.uspis.gov/news/scam-article/smishing-package-tracking-text-scams",
+          "quote": "USPS will not send customers text messages or e-mails without a customer first requesting the service with a tracking number",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "usps-tracking-is-free",
+          "summary": "USPS does not charge for its package tracking tools.",
+          "source_url": "https://www.uspis.gov/news/scam-article/smishing-package-tracking-text-scams",
+          "quote": "USPS does not charge for these services!",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "ftc",
+      "name": "Federal Trade Commission",
+      "aliases": [
+        "FTC",
+        "F.T.C.",
+        "Federal Trade Commission refund department"
+      ],
+      "category": "government",
+      "official_domains": [
+        {
+          "domain": "ftc.gov",
+          "source_url": "https://consumer.ftc.gov/articles/how-avoid-government-impersonation-scam",
+          "quote": "Report it at ReportFraud.ftc.gov",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [],
+      "addresses": [],
+      "accepted_methods": [],
+      "never_methods": [],
+      "contact_facts": [
+        {
+          "id": "ftc-never-asks-for-money",
+          "summary": "The FTC never asks people for money.",
+          "never_asks_for_money": true,
+          "source_url": "https://consumer.ftc.gov/articles/how-avoid-government-impersonation-scam",
+          "quote": "The FTC will never ask you for money, threaten to arrest you, or promise you a prize.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "con-edison",
+      "name": "Con Edison",
+      "aliases": [
+        "ConEd",
+        "Con Ed",
+        "Consolidated Edison",
+        "Consolidated Edison Company of New York",
+        "ConEdison"
+      ],
+      "category": "utility",
+      "official_domains": [
+        {
+          "domain": "coned.com",
+          "source_url": "https://www.coned.com/en/safety/energy-safety/beware-of-scammers",
+          "quote": "Be cautious of unfamiliar bill payment sites and phone numbers listed outside of conEd.com.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [
+        {
+          "label": "Customer service",
+          "number": "1-800-752-6633",
+          "source_url": "https://www.coned.com/en/safety/energy-safety/beware-of-scammers",
+          "quote": "To verify your account details, log in to conEd.com/MyAccount or call 1-800-75-CONED (1-800-752-6633).",
+          "checked": "2026-10-11"
+        }
+      ],
+      "addresses": [
+        {
+          "label": "Bill payments by mail",
+          "address": "Con Edison, JAF Station, P.O. Box 1702, New York, NY 10116-1702",
+          "source_url": "https://www.coned.com/en/accounts-billing/payment-options",
+          "quote": "Con Edison, JAF Station P.O. Box 1702 New York, NY 10116-1702",
+          "checked": "2026-10-11"
+        }
+      ],
+      "accepted_methods": [
+        {
+          "methods": [
+            "bank_transfer",
+            "card"
+          ],
+          "summary": "Bills can be paid from a checking or savings account or with a credit or debit card.",
+          "source_url": "https://www.coned.com/en/accounts-billing/payment-options",
+          "quote": "Pay with your checking or savings account, or a credit/debit card.",
+          "checked": "2026-10-11"
+        },
+        {
+          "methods": [
+            "check"
+          ],
+          "summary": "Bills can be paid by mail with a check or money order.",
+          "source_url": "https://www.coned.com/en/accounts-billing/payment-options",
+          "quote": "Check or Money Order (no fee)",
+          "checked": "2026-10-11"
+        }
+      ],
+      "never_methods": [
+        {
+          "methods": [
+            "gift_card",
+            "crypto",
+            "wire",
+            "payment_app",
+            "zelle"
+          ],
+          "summary": "Con Edison does not accept prepaid gift cards, cryptocurrency, wire transfers, or cash apps such as Venmo, Zelle or PayPal.",
+          "source_url": "https://www.coned.com/en/safety/energy-safety/beware-of-scammers",
+          "quote": "We do not accept payment via prepaid gift cards, cryptocurrency such as Bitcoin, wire transfers, or cash apps (such as Venmo, Zelle, or PayPal)",
+          "checked": "2026-10-11"
+        }
+      ],
+      "contact_facts": []
+    },
+    {
+      "id": "pge",
+      "name": "Pacific Gas and Electric Company",
+      "aliases": [
+        "PG&E",
+        "PG and E",
+        "Pacific Gas and Electric",
+        "Pacific Gas & Electric"
+      ],
+      "category": "utility",
+      "official_domains": [
+        {
+          "domain": "pge.com",
+          "source_url": "https://www.pge.com/en/account/customer-service/scams.html",
+          "quote": "Log into pge.com. If the same message is in your inbox, the email comes from PG&E.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [
+        {
+          "label": "Customer Service Center",
+          "number": "1-877-660-6789",
+          "source_url": "https://www.pge.com/en/account/customer-service/scams.html",
+          "quote": "For general questions, call our Customer Service Center at 1-877-660-6789.",
+          "checked": "2026-10-11"
+        },
+        {
+          "label": "Scam line",
+          "number": "1-833-500-7226",
+          "source_url": "https://www.pge.com/en/account/customer-service/scams.html",
+          "quote": "If you have doubts about an incoming call from PG&E, hang up and call PG&E Customer Service at 1-833-500-SCAM (1-833-500-7226).",
+          "checked": "2026-10-11"
+        }
+      ],
+      "addresses": [],
+      "accepted_methods": [
+        {
+          "methods": [
+            "bank_transfer"
+          ],
+          "summary": "Bills can be paid from a bank account.",
+          "source_url": "https://www.pge.com/en/account/billing-and-assistance/pay-my-bill.html",
+          "quote": "Pay from a bank account. Free of transaction fees.",
+          "checked": "2026-10-11"
+        },
+        {
+          "methods": [
+            "card"
+          ],
+          "summary": "Bills can be paid with a credit or debit card.",
+          "source_url": "https://www.pge.com/en/account/billing-and-assistance/pay-my-bill.html",
+          "quote": "Pay with a credit or debit card. A transaction fee applies.",
+          "checked": "2026-10-11"
+        },
+        {
+          "methods": [
+            "check"
+          ],
+          "summary": "Bills can be paid by mail with a check made payable to PG&E.",
+          "source_url": "https://www.pge.com/en/account/billing-and-assistance/pay-my-bill.html",
+          "quote": "Make your check payable to PG&E",
+          "checked": "2026-10-11"
+        }
+      ],
+      "never_methods": [
+        {
+          "methods": [
+            "gift_card",
+            "payment_app",
+            "zelle"
+          ],
+          "summary": "PG&E says it will never request payment by gift card, MoneyPak card, or a payment app such as Venmo or Zelle.",
+          "source_url": "https://www.pge.com/en/account/customer-service/scams.html",
+          "quote": "PG&E will never request payment by these methods.",
+          "quote_context": "Scam: \"Pay your PG&E bill with a gift card, MoneyPak® Card or through a payment app such as Venmo or Zelle®.\"",
+          "checked": "2026-10-11"
+        },
+        {
+          "methods": [
+            "gift_card"
+          ],
+          "summary": "PG&E never asks for immediate payment with a prepaid cash card.",
+          "source_url": "https://www.pge.com/en/account/customer-service/scams.html",
+          "quote": "We never ask for an immediate payment with a prepaid cash card over the phone or in person.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "contact_facts": [
+        {
+          "id": "pge-no-financial-info-by-phone",
+          "summary": "PG&E says it will never ask for financial information over the phone.",
+          "unsolicited_channels": [
+            "phone_call"
+          ],
+          "source_url": "https://www.pge.com/en/account/customer-service/scams.html",
+          "quote": "PG&E will never ask for your financial information over the phone.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "fpl",
+      "name": "Florida Power & Light",
+      "aliases": [
+        "FPL",
+        "Florida Power and Light",
+        "Florida Power & Light Company",
+        "Florida Power and Light Company"
+      ],
+      "category": "utility",
+      "official_domains": [
+        {
+          "domain": "fpl.com",
+          "source_url": "https://www.fpl.com/landing/protect.html",
+          "quote": "These notifications will not ask you for personal information and will instead lead you to pages at FPL.com for the next steps.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [
+        {
+          "label": "Customer service",
+          "number": "800-697-5223",
+          "source_url": "https://www.fpl.com/landing/protect.html",
+          "quote": "Call the number on your bill or call 800-697-5223.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "addresses": [],
+      "accepted_methods": [
+        {
+          "methods": [
+            "bank_transfer"
+          ],
+          "summary": "Bills can be paid online from a bank account.",
+          "source_url": "https://www.fpl.com/account/bill/ways-to-pay.html",
+          "quote": "Pay your bill for free on FPL.com using your bank account",
+          "checked": "2026-10-11"
+        },
+        {
+          "methods": [
+            "card"
+          ],
+          "summary": "Bills can be paid with a credit or debit card through Speedpay.",
+          "source_url": "https://www.fpl.com/account/bill/ways-to-pay.html",
+          "quote": "Pay your bill through Speedpay ® with credit/debit card",
+          "checked": "2026-10-11"
+        },
+        {
+          "methods": [
+            "check"
+          ],
+          "summary": "Bills can be paid by mail with a check or money order.",
+          "source_url": "https://www.fpl.com/account/bill/ways-to-pay.html",
+          "quote": "Send a check or money order to FPL.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "never_methods": [
+        {
+          "methods": [
+            "gift_card",
+            "crypto",
+            "wire",
+            "payment_app",
+            "zelle"
+          ],
+          "summary": "FPL does not accept prepaid cards, gift cards, cryptocurrency, or transfers through services such as MoneyPak, Zelle, Cash App or Venmo.",
+          "source_url": "https://newsroom.fpl.com/Beware-of-Scammers-FPL-Uncovers-New-Tactic-Targeting-Customers-Internet-Searches-for-FPL",
+          "quote": "We do not accept payment in the form of prepaid cards, gift cards, cryptocurrency or wire transfers",
+          "checked": "2026-10-11"
+        }
+      ],
+      "contact_facts": [
+        {
+          "id": "fpl-no-payment-requests-by-text",
+          "summary": "FPL says it will never text to request immediate payment.",
+          "unsolicited_channels": [
+            "text"
+          ],
+          "source_url": "https://www.fpl.com/landing/protect.html",
+          "quote": "FPL WILL NEVER text you to request immediate payment.",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "fpl-only-authorized-payment-forms",
+          "summary": "FPL only asks customers to pay through its authorized forms of payment.",
+          "source_url": "https://www.fpl.com/landing/protect.html",
+          "quote": "FPL will never ask customers to pay outside of our authorized forms of payment through authorized payment locations.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "dominion-energy",
+      "name": "Dominion Energy",
+      "aliases": [
+        "Dominion Energy Virginia",
+        "Dominion Energy North Carolina",
+        "Dominion Energy South Carolina",
+        "Dominion Power"
+      ],
+      "category": "utility",
+      "official_domains": [
+        {
+          "domain": "dominionenergy.com",
+          "source_url": "https://www.dominionenergy.com/scams",
+          "quote": "make sure you are visiting the official Dominion Energy website (www.DominionEnergy.com)",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [
+        {
+          "label": "Customer service, Virginia and North Carolina",
+          "number": "866-366-4357",
+          "source_url": "https://www.dominionenergy.com/scams",
+          "quote": "Dominion Energy Virginia : 866-366-4357",
+          "checked": "2026-10-11"
+        },
+        {
+          "label": "Customer service, South Carolina",
+          "number": "800-251-7234",
+          "source_url": "https://www.dominionenergy.com/scams",
+          "quote": "Dominion Energy South Carolina : 800-251-7234",
+          "checked": "2026-10-11"
+        }
+      ],
+      "addresses": [],
+      "accepted_methods": [],
+      "never_methods": [
+        {
+          "methods": [
+            "gift_card"
+          ],
+          "summary": "Dominion Energy says it will never ask a customer to buy a money order, prepaid card or gift card.",
+          "source_url": "https://www.dominionenergy.com/scams",
+          "quote": "Dominion Energy will never ask you to purchase a money order, prepaid debit or credit card or gift card.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "contact_facts": [
+        {
+          "id": "dominion-no-in-person-payments",
+          "summary": "Dominion Energy never takes payments in person.",
+          "unsolicited_channels": [
+            "in_person"
+          ],
+          "source_url": "https://www.dominionenergy.com/scams",
+          "quote": "Dominion Energy NEVER takes in-person payments.",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "dominion-no-payments-to-employees-by-phone",
+          "summary": "Dominion Energy employees do not take payments over the phone; phone payments go through its automated system only.",
+          "unsolicited_channels": [
+            "phone_call"
+          ],
+          "source_url": "https://www.dominionenergy.com/scams",
+          "quote": "Dominion Energy employees do not take payments over the phone!",
+          "checked": "2026-10-11"
+        },
+        {
+          "id": "dominion-payment-channels",
+          "summary": "Payments go through the automated phone system, online, by mail, or at an authorized payment center.",
+          "source_url": "https://www.dominionenergy.com/scams",
+          "quote": "Payments can be made through our automated phone system, online, by mail, or at an authorized payment center.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "national-grid",
+      "name": "National Grid",
+      "aliases": [
+        "National Grid US",
+        "National Grid USA",
+        "NationalGrid"
+      ],
+      "category": "utility",
+      "official_domains": [
+        {
+          "domain": "nationalgridus.com",
+          "source_url": "https://www.nationalgridus.com/Our-Company/Scam-Alert",
+          "quote": "Always sign in directly through www.nationalgridus.com and be cautious of links from unfamiliar or unexpected sources",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [
+        {
+          "label": "Customer service, Massachusetts Electric",
+          "number": "1-800-322-3223",
+          "source_url": "https://www.nationalgridus.com/Our-Company/Scam-Alert",
+          "quote": "Massachusetts Electric : 1-800-322-3223",
+          "checked": "2026-10-11"
+        },
+        {
+          "label": "Customer service, Massachusetts Gas",
+          "number": "1-800-233-5325",
+          "source_url": "https://www.nationalgridus.com/Our-Company/Scam-Alert",
+          "quote": "Massachusetts Gas : 1-800-233-5325",
+          "checked": "2026-10-11"
+        },
+        {
+          "label": "Customer service, Upstate New York",
+          "number": "1-800-642-4272",
+          "source_url": "https://www.nationalgridus.com/Our-Company/Scam-Alert",
+          "quote": "Upstate New York : 1-800-642-4272",
+          "checked": "2026-10-11"
+        },
+        {
+          "label": "Customer service, New York City / Metro",
+          "number": "1-718-643-4050",
+          "source_url": "https://www.nationalgridus.com/Our-Company/Scam-Alert",
+          "quote": "New York City / Metro : 1-718-643-4050",
+          "checked": "2026-10-11"
+        },
+        {
+          "label": "Customer service, Long Island",
+          "number": "1-800-930-5003",
+          "source_url": "https://www.nationalgridus.com/Our-Company/Scam-Alert",
+          "quote": "Long Island : 1-800-930-5003",
+          "checked": "2026-10-11"
+        }
+      ],
+      "addresses": [],
+      "accepted_methods": [],
+      "never_methods": [
+        {
+          "methods": [
+            "wire",
+            "gift_card"
+          ],
+          "summary": "National Grid does not contact customers demanding immediate payment by wire transfer or prepaid card.",
+          "source_url": "https://www.nationalgridus.com/Our-Company/Scam-Alert",
+          "quote": "National Grid will not contact customers demanding immediate payment by wire transfer, Green Dot Money-Pak or any other pre-paid card service.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "contact_facts": [
+        {
+          "id": "national-grid-customer-chooses-method",
+          "summary": "National Grid may ask for payment by phone, but leaves the payment method to the customer.",
+          "source_url": "https://www.nationalgridus.com/Our-Company/Scam-Alert",
+          "quote": "National Grid may ask for a payment over the phone, but will leave the method of payment to the customer.",
+          "checked": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "id": "duke-energy",
+      "name": "Duke Energy",
+      "aliases": [
+        "Duke Energy Carolinas",
+        "Duke Energy Progress",
+        "Duke Energy Florida",
+        "Duke Power"
+      ],
+      "category": "utility",
+      "official_domains": [
+        {
+          "domain": "duke-energy.com",
+          "source_url": "https://news.duke-energy.com/releases/10th-annual-utility-scam-awareness-day-putting-customers-first-in-the-fight-against-scams",
+          "quote": "More information is available at duke-energy.com and the Duke Energy News Center.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "phones": [],
+      "addresses": [],
+      "accepted_methods": [],
+      "never_methods": [
+        {
+          "methods": [
+            "gift_card",
+            "crypto"
+          ],
+          "summary": "Duke Energy never accepts prepaid cards or cryptocurrency.",
+          "source_url": "https://news.duke-energy.com/releases/10th-annual-utility-scam-awareness-day-putting-customers-first-in-the-fight-against-scams",
+          "quote": "They may ask for payment via prepaid cards or cryptocurrency – we never accept these methods.",
+          "checked": "2026-10-11"
+        }
+      ],
+      "contact_facts": [
+        {
+          "id": "duke-no-immediate-payment-threats",
+          "summary": "Duke Energy says it will never demand immediate payment or threaten service cut-off.",
+          "source_url": "https://news.duke-energy.com/releases/10th-annual-utility-scam-awareness-day-putting-customers-first-in-the-fight-against-scams",
+          "quote": "Scammers may demand immediate payment or threaten service cut-off, but we will never do that.",
+          "checked": "2026-10-11"
+        }
+      ]
+    }
+  ]
+}
