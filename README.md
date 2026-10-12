@@ -4,6 +4,8 @@
 
 Hold On is a self-hosted [Model Context Protocol](https://modelcontextprotocol.io) server (protocol version 2025-11-25 over Streamable HTTP, plus 2026-07-28) with an Agent Skill and MCP Apps cards. It was built for the Alexa+ track of the Build, Ship, Shape developer hackathon.
 
+A demo video (2:45) is at https://youtu.be/FjqPXs_27Zk. Its scenes were recorded in [Voicestage](https://github.com/needsbuilder/voicestage), a simulator for voice-first MCP apps that was built alongside this project.
+
 > **All payments are simulated.** No real money moves, and no payment provider is connected.
 > Hold On is an independent project. It is not affiliated with, endorsed by, or an official tool of Amazon or of any organisation named in its registry.
 
@@ -393,7 +395,7 @@ npm run typecheck
 - **One trusted contact decides.** Notifications go to the event stream, the inbox tool, the server log and an optional webhook. There is no SMS, email or push delivery, and no second approver.
 - **Demo authentication.** Static bearer tokens, no OAuth, no rate limiting, no audit export. Sessions for 2025-era clients are kept in memory in one process.
 - **The 2026-07-28 path** is covered by fewer tests than the 2025-11-25 path.
-- **The MCP Apps cards** were exercised in jsdom against the official host bridge and in headless Chrome inside a Voicestage phone frame, not in a production assistant host. The first-screen layout was measured at 390x844 and in that frame (about 397x614); a much smaller card area would push the buttons to a bar that sticks to the bottom edge.
+- **The MCP Apps cards** were exercised in jsdom against the official host bridge and in headless Chrome inside a [Voicestage](https://github.com/needsbuilder/voicestage) phone frame, not in a production assistant host. The first-screen layout was measured at 390x844 and in that frame (about 397x614); a much smaller card area would push the buttons to a bar that sticks to the bottom edge.
 - **Not legal or financial advice**, and not a substitute for reporting fraud to the FTC, a bank or the police.
 
 ## Sources
@@ -440,7 +442,7 @@ Read on 2026-10-11. Quotes and dates are in the data files.
 - [docs/hackathon/friction-log.md](docs/hackathon/friction-log.md): what got in the way while building this, with error text and versions.
 - [docs/hackathon/product-feedback.md](docs/hackathon/product-feedback.md): feedback on the MCP specification, the TypeScript SDK, MCP Apps and Agent Skills, and feature requests.
 
-No Alexa+ developer tooling was available to hackathon participants. Hold On has been run against the MCP SDK's client, the MCP Apps host bridge and a browser-based simulator, never against an Alexa+ device or runtime.
+No Alexa+ developer tooling was available to hackathon participants. Hold On has been run against the MCP SDK's client, the MCP Apps host bridge and a browser-based simulator ([Voicestage](https://github.com/needsbuilder/voicestage)), never against an Alexa+ device or runtime.
 
 ## License
 
