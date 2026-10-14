@@ -440,6 +440,7 @@ Read on 2026-10-11. Quotes and dates are in the data files.
 ## Hackathon notes
 
 - [docs/hackathon/friction-log.md](docs/hackathon/friction-log.md): what got in the way while building this, with error text and versions.
+- [docs/hackathon/friction-log-overview.md](docs/hackathon/friction-log-overview.md): the ten entries that cost the most across Hold On and [Voicestage](https://github.com/needsbuilder/voicestage), in the hackathon's format.
 - [docs/hackathon/product-feedback.md](docs/hackathon/product-feedback.md): feedback on the MCP specification, the TypeScript SDK, MCP Apps and Agent Skills, and feature requests.
 
 No Alexa+ developer tooling was available to hackathon participants. Hold On has been run against the MCP SDK's client, the MCP Apps host bridge and a browser-based simulator ([Voicestage](https://github.com/needsbuilder/voicestage)), never against an Alexa+ device or runtime.
