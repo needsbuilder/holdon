@@ -5,7 +5,7 @@ Hold On (this repository) is a self-hosted MCP server with an Agent Skill and MC
 - [Hold On's log](friction-log.md): entries F-01 to F-14, the server side.
 - [Voicestage's log](https://github.com/needsbuilder/voicestage/blob/main/docs/hackathon/friction-log.md): entries V-01 to V-15, the client and host side.
 
-This page has the ten entries that cost us the most, in the hackathon's format: task attempted, steps taken, expected vs. actual result, severity, workaround and suggestion. All error text is copied from a terminal or from Chrome, reproduced on 2026-10-11. The other 18 entries (F-04 to F-13, V-06, V-07, V-09 to V-14) are in the two logs.
+This page has the blocker, every entry rated major and one minor entry (V-08), in the hackathon's format: task attempted, steps taken, expected vs. actual result, severity, workaround and suggestion. All error text is copied from a terminal or from Chrome, reproduced on 2026-10-11. The other 18 entries (F-04 to F-13, V-06, V-07, V-09 to V-14) are in the two logs.
 
 No Alexa+ developer tooling was available to hackathon participants. Nothing here is a statement about how the real Alexa+ runtime behaves.
 
@@ -49,7 +49,7 @@ No Alexa+ developer tooling was available to hackathon participants. Nothing her
 
 - Task: render `ui://` cards in a web page with the official host bridge.
 - Steps: installed `@modelcontextprotocol/ext-apps` and looked in the package for the page that goes in the outer iframe.
-- Expected vs. actual: a proxy document or a helper. The package has no `.html` file, and its README says there is no supported host. Our first host, a single sandboxed iframe, worked, but did not conform: a card that reads `localStorage` threw `SecurityError`.
+- Expected vs. actual: a proxy document or a helper. The package has no `.html` file, and its README says there is no supported host implementation in the repository beyond the `examples/basic-host` example. Our first host, a single sandboxed iframe, worked, but did not conform: a card that reads `localStorage` threw `SecurityError`.
 - Severity: major.
 - Workaround: we wrote the proxy (178 lines) on a second origin, and had to decide alone where the card's policy is applied, which origin to use, and how to keep cards away from the host's own API.
 - Suggestion: ship the proxy page in the npm package with a few lines of Node to serve it.
@@ -75,10 +75,10 @@ No Alexa+ developer tooling was available to hackathon participants. Nothing her
 ## 8. Chrome's fake-microphone flags do not reach speech recognition (V-04)
 
 - Task: test voice input end to end with nobody in the room.
-- Steps: Chrome with `--use-fake-device-for-media-stream` and `--use-file-for-fake-audio-capture=<wav>`, then `new SpeechRecognition().start()`.
+- Steps: Chrome with `--use-fake-device-for-media-stream`, `--use-fake-ui-for-media-stream`, `--use-file-for-fake-audio-capture=<wav>` and `--disable-features=AudioServiceSandbox` (without it even `getUserMedia` gets only zeros), then `new SpeechRecognition().start()`.
 - Expected vs. actual: the recogniser hears the file. It ends with `no-speech` after about 8.3 seconds.
 - Severity: major for testing.
-- Workaround: `recognition.start(track)` with a WebAudio track made from the WAV plus continuous faint noise. All twelve spoken lines were then recognised.
+- Workaround: `recognition.start(track)` with a WebAudio track made from the WAV plus continuous faint noise. All twelve spoken lines were then recognised well enough to be matched to the right script.
 - Suggestion: send recognition's capture through the fake device when those flags are set, and document `start(MediaStreamTrack)` for testing.
 
 ## 9. Speech is refused until the page is clicked (V-05)

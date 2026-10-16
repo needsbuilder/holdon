@@ -126,6 +126,19 @@ export function findPayeeByName(registry: Registry, name: string): PayeeEntry | 
   return best?.entry;
 }
 
+/**
+ * The payee the family vouched for under this exact name, if any.
+ *
+ * A name with nothing to match on never matches. The entry's own name must
+ * also normalise to the same key, so a row stored under an older, looser key
+ * cannot stand in for a different name.
+ */
+export function findTrustedPayee(trustedPayees: TrustedPayee[], name: string | undefined): TrustedPayee | undefined {
+  const key = name ? normalizeName(name) : '';
+  if (!key) return undefined;
+  return trustedPayees.find((t) => t.normalized_name === key && normalizeName(t.name) === key);
+}
+
 function findPayeeByHost(registry: Registry, host: string): PayeeEntry | undefined {
   return registry.payees.find((entry) => entry.official_domains.some((d) => hostMatchesDomain(host, d.domain)));
 }
@@ -184,16 +197,16 @@ export function verifyPayee(registry: Registry, trustedPayees: TrustedPayee[], q
 
   if (!entry) {
     const displayName = query.name ? redactUntrusted(query.name).trim() : undefined;
-    const trusted = query.name
-      ? trustedPayees.find((t) => t.normalized_name === normalizeName(query.name!))
-      : undefined;
+    const trusted = findTrustedPayee(trustedPayees, query.name);
     if (trusted) {
+      // The name the family vouched for can hold a number or link the caller gave. It is said and shown without them.
+      const name = redactUntrusted(trusted.name).trim();
       return {
         status: 'family_trusted',
-        name: trusted.name,
+        name,
         matches: ['name'],
         mismatches: [],
-        note: `${trusted.name} is not in the official registry, but ${trusted.added_by} has confirmed this payee for the family.`,
+        note: `${name} is not in the official registry, but ${trusted.added_by} has confirmed this payee for the family.`,
       };
     }
     return {

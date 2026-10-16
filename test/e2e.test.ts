@@ -254,6 +254,31 @@ describe('state across sessions', () => {
     const late = await sarah.callTool({ name: 'holdon_family_decide', arguments: { hold_id: placed.hold_id, decision: 'approve', trust_payee: true } });
     expect(textOf(late)).toMatch(/Error \(already_decided\)/);
   });
+
+  it('placing a hold again for an approved check returns that hold, ready to pay, and asks the family nothing new', async () => {
+    const check = await call<any>(margaret, 'holdon_check_request', SCENARIOS.utilityBill);
+    const placed = await call<any>(margaret, 'holdon_place_hold', { check_id: check.check_id, summary: 'Electric bill' });
+    await call(sarah, 'holdon_family_decide', { hold_id: placed.hold_id, decision: 'approve' });
+    const again = await call<any>(margaret, 'holdon_place_hold', { check_id: check.check_id, summary: 'Electric bill' });
+    expect(again).toMatchObject({ hold_id: placed.hold_id, status: 'approved', next_step: 'pay' });
+    expect(again.say_to_user).toBe("Sarah said yes to the $182.40 payment to Con Edison. I can make the payment whenever you're ready.");
+    expect((await call<any>(sarah, 'holdon_family_inbox')).count).toBe(0);
+  });
+
+  it('a "no" to the same payment checked a second time also withdraws the first "yes", and the family is told', async () => {
+    const first = await call<any>(margaret, 'holdon_check_request', SCENARIOS.utilityBill);
+    const approved = await call<any>(margaret, 'holdon_place_hold', { check_id: first.check_id, summary: 'Electric bill' });
+    await call(sarah, 'holdon_family_decide', { hold_id: approved.hold_id, decision: 'approve' });
+    const second = await call<any>(margaret, 'holdon_check_request', SCENARIOS.utilityBill);
+    const held = await call<any>(margaret, 'holdon_place_hold', { check_id: second.check_id, summary: 'Electric bill' });
+    const denied = await call<any>(sarah, 'holdon_family_decide', { hold_id: held.hold_id, decision: 'deny' });
+    expect(denied.say_to_user).toBe(
+      'Denied. The $182.40 payment to Con Edison will not be made, and Margaret will be told. An earlier approval of a payment to Con Edison is withdrawn too. A short call to talk it through can help.',
+    );
+    const pay = await margaret.callTool({ name: 'holdon_pay', arguments: { hold_id: approved.hold_id } });
+    expect(textOf(pay)).toMatch(/Error \(denied\)/);
+    expect((await call<any>(margaret, 'holdon_list_holds', { status: 'paid' })).count).toBe(0);
+  });
 });
 
 describe('waiting for a decision', () => {

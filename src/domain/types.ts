@@ -161,7 +161,7 @@ export interface PolicyDecision {
 export interface Policy {
   /** Verified payees at or above this amount need the trusted contact's approval. */
   approval_threshold_usd: number;
-  /** Extra methods never used to pay registry ("official") payees, on top of the built-in floor. */
+  /** Extra methods never used to pay official payees (see {@link POLICY_FLOOR_BLOCKED_METHODS}), on top of the built-in floor. */
   blocked_methods_official_payees: PaymentMethod[];
   /** Methods the family never wants used for anyone. */
   blocked_methods_all_payees: PaymentMethod[];
@@ -170,8 +170,37 @@ export interface Policy {
   notify_on_stop: boolean;
 }
 
-/** Gift cards and cryptocurrency are never used to pay a registry payee. The family cannot switch this off. */
+/**
+ * Gift cards and cryptocurrency are never used to pay an official payee. The family cannot switch this off.
+ *
+ * "Official" means a payee in the registry; or a request whose payee name uses
+ * a phrase from the government, utility or postal word lists in
+ * `rules/scam-patterns.json` (federal, state and local agencies, courts,
+ * police, tax, toll and motor vehicle offices, electric, gas and water
+ * utilities, the Postal Service), or starts with "City of", "County of",
+ * "Town of", "Township of" or "Village of" (a leading "the" aside); or a
+ * request whose words claim it comes from the government or a utility, such as
+ * "IRS" or "electric bill" (see `officialWord` in `src/domain/rules.ts`). When
+ * no payee is named, the description is read for all of these. A request that
+ * names such a payee in words the lists do not know is not covered.
+ */
 export const POLICY_FLOOR_BLOCKED_METHODS: readonly PaymentMethod[] = ['gift_card', 'crypto'];
+
+/** Which policy rule rules a method out: the built-in floor, or one of the family's two lists. */
+export type PolicyRule = 'floor' | 'family_official_payees' | 'family_all_payees';
+
+/**
+ * The one reason chosen to explain, in the older adult's language, why a
+ * payment was refused at pay time. Holds only Hold On's own wording: a policy
+ * rule, a pattern's `why`, a registry fact, or which kind of payment the
+ * request's words mentioned. Never anything taken from the message.
+ */
+export type PaymentRefusalReason =
+  /** `official_by` says how the payee counts as official, for the two rules about official payees. */
+  | { kind: 'policy'; rule: PolicyRule; official_by?: 'registry' | 'words' }
+  | { kind: 'scam_pattern'; why: string }
+  | { kind: 'official_fact'; fact: string }
+  | { kind: 'mentioned_method'; mentioned: 'gift_card' | 'crypto' };
 
 export const DEFAULT_POLICY: Policy = {
   approval_threshold_usd: 100,
@@ -202,6 +231,8 @@ export interface TrustedPayee {
   added_by: string;
   added_at: string;
   note?: string;
+  /** The hold whose approval added this payee, so that withdrawing that approval also withdraws the vouch. */
+  added_by_hold?: string;
 }
 
 export interface Principal {

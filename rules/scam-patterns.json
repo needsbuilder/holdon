@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-11",
+  "version": "2026-10-15",
   "about": "Scam patterns published by official US sources, expressed as machine-checkable conditions. Each pattern carries the official guidance it is based on: page URL, a short verbatim quote, and the date the page was read. The rule engine evaluates these conditions deterministically; no language model is involved in a verdict.",
   "condition_language": {
     "all": "every sub-condition matches",
@@ -10,13 +10,21 @@
     "claim_in": "urgency_claims contains one of the listed values",
     "flag": "the named boolean input is true",
     "payee_category_in": "the named payee resolves to a registry entry in one of these categories, or the request text uses words from the matching lexicon",
-    "text": "the description, summary or payee name contains a whole-word phrase from the named lexicon"
+    "payee_is": "the payee itself is in one of these categories: its name or link resolves to a registry entry in one of them, or its name uses the category's words (the matching lexicon, the lexicon of the same name ending in _payee, a phrase from the one ending in _name_start at the start of the name, a name from the one ending in _name as the whole name, or a name from the one ending in _name_end at the end of the name, with a leading \"the\" and trailing words such as Company, billing or account set aside, and also Office, renewal, registration or fee after a name ending). When no payee is named, the request text is read instead",
+    "text": "the description, summary or payee name contains a whole-word phrase from the named lexicon; for gift_card and crypto, also an amount before Google Play or ETH (\"$500 of Google Play\", \"0.5 ETH\")"
   },
   "lexicons": {
-    "gift_card": ["gift card", "gift cards", "giftcard", "giftcards", "prepaid card", "prepaid cards", "prepaid debit card", "prepaid debit cards", "google play card", "google play cards", "apple gift card", "apple gift cards", "itunes card", "itunes cards", "steam card", "steam cards", "moneypak", "money pak", "green dot", "vanilla card", "vanilla cards", "reload card", "numbers on the back of the card"],
-    "crypto": ["bitcoin", "bitcoins", "cryptocurrency", "crypto", "btc", "ethereum", "tether", "usdt", "bitcoin atm", "crypto atm", "bitcoin machine", "bitcoin kiosk", "crypto kiosk", "crypto wallet", "wallet address"],
+    "gift_card": ["gift card", "gift cards", "giftcard", "giftcards", "prepaid card", "prepaid cards", "prepaid debit card", "prepaid debit cards", "google play card", "google play cards", "apple gift card", "apple gift cards", "itunes card", "itunes cards", "steam card", "steam cards", "moneypak", "money pak", "green dot", "vanilla card", "vanilla cards", "reload card", "numbers on the back of the card", "google play gift card", "google play gift cards", "google play code", "google play codes", "google play credit", "in google play", "egift", "egift card", "egift cards", "prepaid visa", "visa prepaid", "prepaid mastercard", "onevanilla", "one vanilla", "vanilla visa", "vanilla mastercard", "vanilla prepaid", "vanilla reload", "paysafecard", "paysafe card", "razer gold", "steam wallet", "ebay card", "ebay cards", "xbox card", "xbox cards", "playstation card", "playstation cards", "psn card", "psn cards", "netspend", "reloadit", "pay with google play", "pay him with google play", "pay them with google play", "paid with google play", "worth of google play", "google play numbers", "google play card numbers"],
+    "crypto": ["bitcoin", "bitcoins", "cryptocurrency", "crypto", "btc", "ethereum", "tether", "usdt", "bitcoin atm", "crypto atm", "bitcoin machine", "bitcoin kiosk", "crypto kiosk", "crypto wallet", "wallet address", "cryptocurrencies", "bit coin", "bit coins", "litecoin", "litecoins", "dogecoin", "in eth", "send eth", "buy eth", "eth wallet", "in ether", "ether wallet", "with eth", "with ether", "using eth", "send ether", "buy ether", "transfer eth", "deposit eth", "usdc", "usd coin", "stablecoin", "stablecoins", "stable coin", "stable coins", "xrp", "monero", "in digital currency", "with digital currency", "send digital currency", "buy digital currency", "in virtual currency", "with virtual currency", "send virtual currency", "buy virtual currency", "coinbase", "binance", "coin atm", "btc atm", "crypto machine", "bitcoin depot", "coinflip"],
     "government": ["irs", "internal revenue", "internal revenue service", "social security", "social security administration", "ssa", "medicare", "ftc", "federal trade commission", "fbi", "dea", "federal agent", "federal officer", "government", "government agency", "treasury department", "homeland security", "customs and border protection", "border patrol", "immigration", "uscis", "sheriff", "sheriffs office", "police department", "police officer", "us marshal", "us marshals", "district attorney", "court clerk", "court official", "county court", "federal court", "jury duty", "tax office", "tax agent"],
     "utility": ["electric company", "electric bill", "electricity bill", "power company", "power bill", "gas company", "gas bill", "water company", "water bill", "utility", "utility company", "utility bill", "utilities", "light bill"],
+    "government_payee": ["department of motor vehicles", "department of motor vehicle", "motor vehicles department", "motor vehicle department", "division of motor vehicles", "bureau of motor vehicles", "registry of motor vehicles", "motor vehicle commission", "motor vehicles commission", "the dmv", "dmv registration", "dmv fee", "dmv fees", "secretary of state", "franchise tax board", "department of revenue", "revenue department", "department of taxation", "tax collector", "tax assessor", "county treasurer", "city treasurer", "highway patrol", "state police", "state trooper", "state troopers", "municipal court", "traffic court", "district court", "circuit court", "superior court", "probate court", "clerk of court", "clerk of the court", "county clerk", "city hall", "department of justice", "us treasury", "department of the treasury", "department of treasury", "ezpass", "e zpass", "e z pass", "sunpass", "fastrak", "toll authority", "turnpike authority"],
+    "government_name_end": ["dmv"],
+    "government_name_start": ["city of", "county of", "town of", "village of", "township of"],
+    "utility_payee": ["water department", "department of water", "water and power department", "sewer department", "sewer bill", "water district", "water authority", "water and sewer department", "water and sewer authority", "water and sewer district", "water and sewer bill", "gas and electric company", "electric and gas company", "power and light company", "light and power company", "electric cooperative", "electric co op", "electric coop", "electric membership corporation", "rural electric association", "public utility district", "public service company", "power authority", "public power district", "energy company", "southern california edison", "commonwealth edison", "comed", "ohio edison", "xcel energy", "entergy", "ameren", "pepco", "eversource", "nv energy", "puget sound energy", "consumers energy", "dte energy", "centerpoint energy", "atmos energy", "we energies", "pacificorp", "peco", "ppl electric", "pseg", "pse and g", "public service electric and gas", "socalgas", "southern california gas", "sdg and e", "san diego gas and electric", "baltimore gas and electric", "rochester gas and electric", "kansas city power and light", "portland general electric", "ladwp", "seattle city light"],
+    "utility_name_end": ["rural electric", "rural electric cooperative", "rural electric company"],
+    "utility_name": ["georgia power", "alabama power", "mississippi power", "gulf power", "appalachian power", "idaho power", "kentucky power", "rocky mountain power", "pacific power", "tampa electric", "southwest gas"],
+    "postal_payee": ["post office", "postal service", "usps", "us postal"],
     "legal_threat": ["arrest", "arrested", "warrant", "jail", "prison", "deport", "deported", "deportation", "lawsuit", "sue me", "sued", "legal action", "suspend", "suspended", "suspension", "revoke", "revoked", "frozen", "freeze my", "seize", "seized", "prosecute", "prosecuted", "badge number", "criminal charges"],
     "secrecy": ["not to tell", "dont tell anyone", "do not tell anyone", "not tell anyone", "cant tell anyone", "cannot tell anyone", "dont tell my", "do not tell my", "dont tell his", "do not tell his", "dont tell her", "do not tell her", "dont tell your", "do not tell your", "dont tell mom", "dont tell dad", "dont tell the bank", "do not tell the bank", "dont tell the cashier", "do not tell the cashier", "keep it secret", "keep it a secret", "keep this secret", "keep this a secret", "keep it quiet", "keep this quiet", "keep it between us", "keep this between us", "just between us", "nobody can know", "no one can know", "not to talk to", "gag order"],
     "family_member": ["grandson", "granddaughter", "grandchild", "grandchildren", "grandkid", "grandkids", "nephew", "niece", "my son", "my daughter", "my brother", "my sister", "cousin", "family member", "relative", "loved one"],
@@ -50,9 +58,23 @@
                 "text": "gift_card"
               },
               {
-                "not": {
-                  "text": "gift_occasion"
-                }
+                "any": [
+                  {
+                    "not": {
+                      "text": "gift_occasion"
+                    }
+                  },
+                  {
+                    "all": [
+                      {
+                        "text": "gift_occasion"
+                      },
+                      {
+                        "payee_is": ["government", "utility"]
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           }

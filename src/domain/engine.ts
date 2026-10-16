@@ -7,18 +7,22 @@
  */
 import { sayCheck } from './language.js';
 import { verifyPayee, type Registry } from './registry.js';
-import { inferMethod, matchPatterns, type Features, type RuleSet } from './rules.js';
-import { containsPhrase, hostMention, methodLabel, normalizeText } from './text.js';
+import { inferMethod, lexiconHits, matchPatterns, officialWord, payeeIs, type Features, type RuleSet } from './rules.js';
+import { hostMention, methodLabel, normalizeName, normalizeText } from './text.js';
 import {
+  PAYEE_CATEGORIES,
   POLICY_FLOOR_BLOCKED_METHODS,
   type CheckInput,
   type CheckOutcome,
   type ClarifyingField,
   type HoldReason,
   type NextStep,
+  type PayeeResult,
   type PaymentMethod,
+  type PaymentRefusalReason,
   type Policy,
   type PolicyDecision,
+  type PolicyRule,
   type TrustedPayee,
   type Verdict,
 } from './types.js';
@@ -30,23 +34,60 @@ export interface EngineContext {
   trustedPayees: TrustedPayee[];
   /** Display name of the trusted contact who would be asked. Undefined when the circle has none. */
   contactName?: string;
+  /**
+   * Payees the family said no to recently: registry ids, and `normalizeName`
+   * keys for payees outside the registry. A payment to one of them always goes
+   * to the family again, so a denial is not undone by asking a second time.
+   */
+  recentDenials?: { registryIds: string[]; names: string[] };
 }
 
-function resolveMethod(input: CheckInput, text: string, rules: RuleSet): Pick<CheckOutcome, 'effective_method' | 'method_source'> {
+/** The words the rules look at: the description and the payee name. */
+function requestText(input: CheckInput): string {
+  return normalizeText(`${input.description} ${input.payee_name ?? ''}`);
+}
+
+/** The payee name alone, in the same form. Undefined when no payee was named. */
+function payeeText(input: CheckInput): string | undefined {
+  const name = normalizeText(input.payee_name ?? '');
+  return name.trim() ? name : undefined;
+}
+
+function resolveMethod(
+  input: CheckInput,
+  text: string,
+  rules: RuleSet,
+  officialPayee: boolean,
+): Pick<CheckOutcome, 'effective_method' | 'method_source'> {
   if (input.payment_method && input.payment_method !== 'unknown') {
     return { effective_method: input.payment_method, method_source: 'input' };
   }
-  const inferred = inferMethod(text, rules);
+  const inferred = inferMethod(text, rules, officialPayee);
   if (inferred) return { effective_method: inferred, method_source: 'inferred' };
   return { effective_method: 'unknown', method_source: 'unknown' };
 }
 
-/** Whether the request names, or claims to come from, an official payee (registry entry, government or utility). */
-function claimsOfficialPayee(registryId: string | undefined, text: string, rules: RuleSet): boolean {
+/**
+ * Whether the request names, or claims to come from, an official payee: a
+ * registry entry, a government agency, utility or post office named as the
+ * payee, or general words such as "IRS" or "electric bill" anywhere in the
+ * request (see {@link officialWord}). Decides the built-in floor and the
+ * family's settings for official payees.
+ */
+function claimsOfficialPayee(registryId: string | undefined, input: CheckInput, rules: RuleSet): boolean {
   if (registryId) return true;
-  return ['government', 'utility'].some((lexicon) =>
-    (rules.lexicons[lexicon] ?? []).some((phrase) => containsPhrase(text, phrase)),
-  );
+  const text = requestText(input);
+  const payee = payeeText(input);
+  return PAYEE_CATEGORIES.some((category) => officialWord(rules, category, text, payee) !== undefined);
+}
+
+/** Whether the family said no to a payment to this payee recently. */
+function deniedRecently(payee: PayeeResult, input: CheckInput, ctx: EngineContext): boolean {
+  const denials = ctx.recentDenials;
+  if (!denials) return false;
+  if (payee.registry_id) return denials.registryIds.includes(payee.registry_id);
+  const key = normalizeName(input.payee_name ?? '');
+  return key !== '' && denials.names.includes(key);
 }
 
 /** The sentence recorded in `policy.blocked_reasons` for a high-severity pattern. */
@@ -91,24 +132,37 @@ export function explainReasons(outcome: Pick<CheckOutcome, 'risk_signals' | 'pay
   return [...all.filter((reason) => reason.blocking), ...all.filter((reason) => !reason.blocking)];
 }
 
+/** The policy rules that rule a payment method out, independent of any scam pattern. */
+function policyMethodRules(policy: Policy, method: PaymentMethod, officialPayee: boolean): PolicyRule[] {
+  const rules: PolicyRule[] = [];
+  if (method === 'unknown') return rules;
+  if (officialPayee && POLICY_FLOOR_BLOCKED_METHODS.includes(method)) rules.push('floor');
+  else if (officialPayee && policy.blocked_methods_official_payees.includes(method)) rules.push('family_official_payees');
+  if (policy.blocked_methods_all_payees.includes(method)) rules.push('family_all_payees');
+  return rules;
+}
+
+/** The sentence recorded in `policy.blocked_reasons` for a policy rule. */
+function policyRuleSentence(rule: PolicyRule, method: PaymentMethod): string {
+  if (rule === 'floor') return `Hold On never pays a government agency, utility or other official payee with ${methodLabel(method)}.`;
+  if (rule === 'family_official_payees') return `The family's settings do not allow paying official payees with ${methodLabel(method)}.`;
+  return `The family's settings do not allow payments by ${methodLabel(method)}.`;
+}
+
 /** Policy blocks that apply to a payment method, independent of any scam pattern. */
 export function policyMethodBlocks(policy: Policy, method: PaymentMethod, officialPayee: boolean): string[] {
-  const reasons: string[] = [];
-  if (method === 'unknown') return reasons;
-  if (officialPayee && POLICY_FLOOR_BLOCKED_METHODS.includes(method)) {
-    reasons.push(`Hold On never pays a government agency, utility or other official payee with ${methodLabel(method)}.`);
-  } else if (officialPayee && policy.blocked_methods_official_payees.includes(method)) {
-    reasons.push(`The family's settings do not allow paying official payees with ${methodLabel(method)}.`);
-  }
-  if (policy.blocked_methods_all_payees.includes(method)) {
-    reasons.push(`The family's settings do not allow payments by ${methodLabel(method)}.`);
-  }
-  return reasons;
+  return policyMethodRules(policy, method, officialPayee).map((rule) => policyRuleSentence(rule, method));
 }
 
 export function evaluateRequest(input: CheckInput, ctx: EngineContext): CheckOutcome {
-  const text = normalizeText(`${input.description} ${input.payee_name ?? ''}`);
-  const { effective_method, method_source } = resolveMethod(input, text, ctx.rules);
+  const text = requestText(input);
+  const payeeName = payeeText(input);
+  // Who the request is to decides whether a gift-occasion word may excuse a gift card mention, so it is found first.
+  // Only the payee counts here: "a birthday gift card for my grandson the police officer" is still a present.
+  const registryPayee = verifyPayee(ctx.registry, [], { name: input.payee_name, url: input.claimed_url });
+  const payeeOfficial = payeeIs(['government', 'utility'], { text, registry_category: registryPayee.category, payee_name: payeeName }, ctx.rules) !== undefined;
+  const officialPayee = claimsOfficialPayee(registryPayee.registry_id, input, ctx.rules);
+  const { effective_method, method_source } = resolveMethod(input, text, ctx.rules, payeeOfficial);
   const channel = input.contact_channel ?? 'unknown';
 
   const payee = verifyPayee(ctx.registry, ctx.trustedPayees, {
@@ -126,10 +180,10 @@ export function evaluateRequest(input: CheckInput, ctx: EngineContext): CheckOut
     claims: input.urgency_claims ?? [],
     secrecy_requested: input.secrecy_requested === true,
     registry_category: payee.category,
+    payee_name: payeeName,
   };
   const risk_signals = matchPatterns(features, ctx.rules);
 
-  const officialPayee = claimsOfficialPayee(payee.registry_id, text, ctx.rules);
   const blocked_reasons = [
     ...risk_signals.filter((s) => s.severity === 'high').map((s) => patternBlockReason(s.label)),
     ...payee.mismatches.filter((m) => m.severity === 'high').map((m) => m.detail),
@@ -147,7 +201,7 @@ export function evaluateRequest(input: CheckInput, ctx: EngineContext): CheckOut
   else verdict = 'unknown';
 
   let policy: PolicyDecision;
-  let approvalCause: 'amount_missing' | 'over_limit' | undefined;
+  let approvalCause: 'amount_missing' | 'over_limit' | 'recently_denied' | undefined;
   if (verdict === 'stop') {
     policy = {
       requires_family_approval: true,
@@ -182,6 +236,14 @@ export function evaluateRequest(input: CheckInput, ctx: EngineContext): CheckOut
     policy = {
       requires_family_approval: true,
       reason: "The amount is at or above the family's approval limit.",
+      blocked: false,
+      blocked_reasons: [],
+    };
+  } else if (deniedRecently(payee, input, ctx)) {
+    approvalCause = 'recently_denied';
+    policy = {
+      requires_family_approval: true,
+      reason: 'The trusted contact recently said no to a payment to this payee, so they are asked again before any money moves.',
       blocked: false,
       blocked_reasons: [],
     };
@@ -223,9 +285,67 @@ export function evaluateRequest(input: CheckInput, ctx: EngineContext): CheckOut
 export function pickClarifyingQuestion(input: CheckInput, ctx: EngineContext): ClarifyingField | undefined {
   const outcome = evaluateRequest(input, ctx);
   if (outcome.verdict === 'stop') return undefined;
-  const text = normalizeText(`${input.description} ${input.payee_name ?? ''}`);
   const channelMissing = !input.contact_channel || input.contact_channel === 'unknown';
-  if (channelMissing && claimsOfficialPayee(outcome.payee.registry_id, text, ctx.rules)) return 'contact_channel';
+  if (channelMissing && claimsOfficialPayee(outcome.payee.registry_id, input, ctx.rules)) return 'contact_channel';
   if (outcome.method_source === 'unknown') return 'payment_method';
   return undefined;
+}
+
+/** Everything that stops this request, in the order it is explained: policy, then scam patterns, then registry facts. */
+function refusalReasons(input: CheckInput, ctx: EngineContext): PaymentRefusalReason[] {
+  const outcome = evaluateRequest(input, ctx);
+  const official = claimsOfficialPayee(outcome.payee.registry_id, input, ctx.rules);
+  const officialBy = outcome.payee.registry_id ? 'registry' : 'words';
+  return [
+    ...policyMethodRules(ctx.policy, outcome.effective_method, official).map(
+      (rule): PaymentRefusalReason => ({ kind: 'policy', rule, ...(rule === 'family_all_payees' ? {} : { official_by: officialBy }) }),
+    ),
+    ...outcome.risk_signals
+      .filter((signal) => signal.severity === 'high')
+      .map((signal): PaymentRefusalReason => ({ kind: 'scam_pattern', why: signal.why })),
+    ...outcome.payee.mismatches
+      .filter((mismatch) => mismatch.severity === 'high')
+      .map((mismatch): PaymentRefusalReason => ({ kind: 'official_fact', fact: mismatch.fact ?? mismatch.detail })),
+  ];
+}
+
+export interface PayTimeRefusal {
+  /**
+   * `method_not_allowed` when the method given at pay time brings the reason.
+   * `blocked` when the reason stands whatever the method: the rules, the
+   * registry or the family's settings changed after the request was approved.
+   */
+  code: 'method_not_allowed' | 'blocked';
+  /** The one reason to explain: a policy rule first, then a scam pattern, then a registry fact. */
+  reason: PaymentRefusalReason;
+}
+
+/**
+ * Check a payment once more just before it is made, with the method that will
+ * actually be used and today's rules, registry and settings.
+ *
+ * `approvedMethod` is the method the request was approved with (`unknown` when
+ * none was given); `method` is the one that will be used. Anything that stops
+ * the request with the approved method stands whatever is chosen now. Only
+ * what appears with `method` and not with `approvedMethod` is the method's
+ * doing. Pure, like {@link evaluateRequest}.
+ */
+export function payTimeRefusal(input: CheckInput, approvedMethod: PaymentMethod, method: PaymentMethod, ctx: EngineContext): PayTimeRefusal | undefined {
+  const standing = refusalReasons({ ...input, payment_method: approvedMethod }, ctx);
+  if (standing.length > 0) return { code: 'blocked', reason: standing[0]! };
+  if (method === approvedMethod) return undefined;
+
+  const introduced = refusalReasons({ ...input, payment_method: method }, ctx);
+  if (approvedMethod === 'unknown') {
+    // The request's words mention gift cards or cryptocurrency, but the method is first named now, as something else.
+    // Refusing is safer than asking the family: whoever approved it (the family, or the family's settings) did so
+    // without a method, and a hold placed now would still show the family the same words without one. A new check
+    // with the method stated lets the rules and the family see both together. (A gift card mention gets this far only
+    // beside a gift-occasion word, as in "a gift card for her birthday"; cryptocurrency words stop the check itself.)
+    const text = requestText(input);
+    for (const mentioned of ['gift_card', 'crypto'] as const) {
+      if (method !== mentioned && lexiconHits(ctx.rules, mentioned, text).length > 0) introduced.push({ kind: 'mentioned_method', mentioned });
+    }
+  }
+  return introduced.length > 0 ? { code: 'method_not_allowed', reason: introduced[0]! } : undefined;
 }

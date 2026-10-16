@@ -329,7 +329,9 @@ export const FamilyDecideInput = z.object({
   trust_payee: z
     .boolean()
     .optional()
-    .describe('Set to true to approve a payee that is not in the official registry. It records that you personally know and trust this payee, and remembers it for next time.'),
+    .describe(
+      'Set to true to approve a payee that is not in the official registry. It records that you personally know and trust this payee, and remembers it for next time. Changing this approval to a denial later takes the vouch back.',
+    ),
 });
 export const FamilyDecideOutput = z.object({
   hold_id: z.string(),
@@ -352,7 +354,9 @@ export const UpdatePolicyInput = z
       .array(z.enum(PAYMENT_METHODS))
       .max(10)
       .optional()
-      .describe('Extra payment methods never used for government agencies, utilities and other official payees. Gift cards and cryptocurrency are always blocked for them and cannot be removed.'),
+      .describe(
+        "Extra payment methods never used for official payees: the payees in Hold On's registry; any request whose payee name uses Hold On's words for a government agency, utility or post office (federal, state and local agencies, courts, police, tax, toll and motor vehicle offices, electric, gas and water utilities, the Postal Service) or starts with City of, County of, Town of, Township of or Village of; and any request that says it comes from the government or a utility, such as the IRS or an electric bill. When no payee is named, the description is read instead. A payee named in words Hold On does not know is not covered. Gift cards and cryptocurrency are always blocked for official payees and cannot be removed.",
+      ),
     blocked_methods_all_payees: z.array(z.enum(PAYMENT_METHODS)).max(10).optional().describe('Payment methods the family never wants used for anyone.'),
     hold_expiry_hours: z.number().int().min(1).max(168).optional().describe('How long a hold waits for a decision, and how long an approval stays valid. 1 to 168 hours.'),
     notify_on_stop: z.boolean().optional().describe('When a request is stopped, still tell you about it. Default true.'),

@@ -12,6 +12,7 @@ import type {
   OfficialInfo,
   PayeeResult,
   PaymentMethod,
+  PaymentRefusalReason,
   PolicyDecision,
   RiskSignal,
   Verdict,
@@ -43,8 +44,8 @@ export interface CheckLanguageInput {
   amount_usd?: number;
   contactName?: string;
   notifyOnStop: boolean;
-  /** The reason a verified payee still needs approval: `amount_missing` or `over_limit`. */
-  approvalCause?: 'amount_missing' | 'over_limit';
+  /** The reason a verified payee still needs approval: `amount_missing`, `over_limit` or `recently_denied`. */
+  approvalCause?: 'amount_missing' | 'over_limit' | 'recently_denied';
 }
 
 export function sayCheck(input: CheckLanguageInput): string {
@@ -87,6 +88,11 @@ export function sayCheck(input: CheckLanguageInput): string {
     if (input.approvalCause === 'amount_missing') {
       return `${basis} I don't have an amount yet, so ${contact ? `I'll check with ${contact} before anything is paid` : 'nothing will be paid for now'}.`;
     }
+    if (input.approvalCause === 'recently_denied') {
+      return contact
+        ? `${basis} A recent payment to them was turned down, so ${contact} gets a quick request to approve this one first. Nothing is paid until then.`
+        : `${basis} A recent payment to them was turned down, so it needs a second look before anything is paid.`;
+    }
     return contact
       ? `${basis} Because of the amount, ${contact} gets a quick request to approve it first. Nothing is paid until then.`
       : `${basis} Because of the amount, it needs a second look before anything is paid.`;
@@ -116,6 +122,8 @@ export interface HoldLanguageInput {
   blocked: boolean;
   contactName?: string;
   deciderName?: string;
+  /** True when the family's settings approved the payment on their own, without anyone being asked. */
+  decidedByPolicy?: boolean;
   note?: string;
   payeeName?: string;
   amount_usd?: number;
@@ -148,7 +156,9 @@ export function sayHoldStatus(input: HoldLanguageInput): string {
         ? `${contact} has been told about this request and hasn't answered yet. Nothing has been paid, and this one won't be paid through me.`
         : `${contact} hasn't answered yet. Nothing has been paid, and ${describePayment(input)} stays on hold until then.`;
     case 'approved':
-      return `${decider} said yes to ${describePayment(input)}.${note} I can make the payment whenever you're ready.`;
+      return input.decidedByPolicy
+        ? `Your family's settings allow ${describePayment(input)} without asking anyone first. I can make the payment whenever you're ready.`
+        : `${decider} said yes to ${describePayment(input)}.${note} I can make the payment whenever you're ready.`;
     case 'denied':
       return `${decider} looked at this and asked that it not be paid.${note} Nothing has been paid. If you'd like, the two of you can talk it over.`;
     case 'expired':
@@ -164,19 +174,77 @@ export function sayPaid(input: { payeeName: string; amount_usd: number; method: 
   return `Done. ${formatUsd(input.amount_usd)} was paid to ${input.payeeName} by ${methodLabel(input.method)}. The confirmation code is ${input.confirmation}. ${SIMULATED_NOTE}`;
 }
 
+export interface PaymentRefusalLanguageInput {
+  /** The method that would have been used. */
+  method: PaymentMethod;
+  /** The registry's name, or the name the family vouched for with numbers and links removed. */
+  payeeName: string;
+  reason: PaymentRefusalReason;
+  /** True when the method chosen now is the problem; false when the payment cannot be made whatever the method. */
+  byMethod: boolean;
+}
+
+/** One reason in Hold On's own words. A payee is called a government agency or utility only when the registry says so. */
+function refusalReason(reason: PaymentRefusalReason, method: string): string {
+  switch (reason.kind) {
+    case 'policy': {
+      if (reason.rule === 'family_all_payees') return `Your family's settings don't allow payments by ${method}.`;
+      const floor = reason.rule === 'floor';
+      if (reason.official_by === 'registry') {
+        return floor
+          ? `Hold On never pays a government agency or utility with ${method}.`
+          : `Your family's settings don't allow paying a government agency or utility with ${method}.`;
+      }
+      return `This request mentions a government agency or utility, and ${floor ? 'Hold On never pays' : "your family's settings don't allow paying"} one with ${method}.`;
+    }
+    case 'scam_pattern':
+      return reason.why;
+    case 'official_fact':
+      return reason.fact;
+    case 'mentioned_method':
+      return `Because it mentions ${methodLabel(reason.mentioned)}, I need to look at it again together with how you'll be paying.`;
+  }
+}
+
+/**
+ * Why a payment was refused at the last step, said to the older adult. Names
+ * the method when the method is the problem, gives one reason the way
+ * {@link sayCheck} does (a policy rule first, otherwise the pattern's own
+ * `why` or the registry's fact), and ends by saying that nothing was paid.
+ * When the request's own words mentioned gift cards or cryptocurrency, the
+ * method chosen now is not the problem, so it opens without naming it.
+ */
+export function sayPaymentRefused(input: PaymentRefusalLanguageInput): string {
+  const method = methodLabel(input.method);
+  let opening: string;
+  if (input.reason.kind === 'mentioned_method') opening = "I can't make this payment yet.";
+  else if (input.byMethod) opening = `I can't pay ${input.payeeName} with ${method}.`;
+  else opening = `I can't make this payment to ${input.payeeName} now.`;
+  return `${opening} ${refusalReason(input.reason, method)} Nothing has been paid.`;
+}
+
 export function sayDecision(input: {
   decision: 'approve' | 'deny';
   memberName: string;
   payeeName?: string;
   amount_usd?: number;
   trustedPayee?: boolean;
+  /** A denial that withdrew the approval which had added this payee to the family's list. */
+  trustedPayeeRemoved?: boolean;
+  /** How many earlier approvals of payments to the same payee, not yet paid, the denial withdrew. */
+  approvalsWithdrawn?: number;
 }): string {
   const member = firstName(input.memberName) ?? input.memberName;
   if (input.decision === 'approve') {
     const trusted = input.trustedPayee && input.payeeName ? ` ${input.payeeName} is now a confirmed payee for the family.` : '';
     return `Approved. ${member} can now go ahead with ${describePayment(input)}.${trusted}`;
   }
-  return `Denied. ${describePayment(input).replace(/^the /, 'The ')} will not be made, and ${member} will be told. A short call to talk it through can help.`;
+  const count = input.approvalsWithdrawn ?? 0;
+  const to = input.payeeName ?? 'the same payee';
+  const withdrawn =
+    count === 0 ? '' : count === 1 ? ` An earlier approval of a payment to ${to} is withdrawn too.` : ` ${count} earlier approvals of payments to ${to} are withdrawn too.`;
+  const untrusted = input.trustedPayeeRemoved && input.payeeName ? ` ${input.payeeName} is no longer a confirmed payee for the family.` : '';
+  return `Denied. ${describePayment(input).replace(/^the /, 'The ')} will not be made, and ${member} will be told.${withdrawn}${untrusted} A short call to talk it through can help.`;
 }
 
 export function sayInbox(count: number, memberName?: string): string {

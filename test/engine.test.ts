@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateRequest, pickClarifyingQuestion, policyMethodBlocks } from '../src/domain/engine.js';
+import { evaluateRequest, payTimeRefusal, pickClarifyingQuestion, policyMethodBlocks } from '../src/domain/engine.js';
 import { containsActionableContact } from '../src/domain/text.js';
 import { DEFAULT_POLICY, type CheckInput } from '../src/domain/types.js';
 import { SCENARIOS, engineContext } from './helpers.js';
@@ -141,6 +141,19 @@ describe('evaluateRequest: everyday requests are not treated as scams', () => {
     expect(outcome.verdict).toBe('stop');
   });
 
+  it('a present is no excuse when gift cards go to a government agency or utility', () => {
+    const cases: CheckInput[] = [
+      { description: 'The IRS agent said to pay the $50 penalty with Visa gift cards, as a thank you gift for his help', payee_name: 'IRS', amount_usd: 50 },
+      { description: 'The man from the power company wants two Target gift cards as a Christmas present so my lights stay on', payee_name: 'Georgia Power', amount_usd: 200 },
+      { description: 'The deputy said a Google Play card for his birthday would clear my warrant', payee_name: 'County Sheriff', amount_usd: 300 },
+    ];
+    for (const input of cases) {
+      const outcome = run(input);
+      expect(outcome, input.description).toMatchObject({ verdict: 'stop', effective_method: 'gift_card', method_source: 'inferred' });
+      expect(outcome.risk_signals.map((s) => s.id), input.description).toContain('gift-card-payment-demand');
+    }
+  });
+
   it('a Social Security overpayment letter that came by mail is not stopped', () => {
     const outcome = run({ description: 'Social Security sent a letter saying I was overpaid and must repay the overpayment', payee_name: 'Social Security', amount_usd: 400, payment_method: 'check', contact_channel: 'mail' });
     expect(outcome.risk_signals).toEqual([]);
@@ -176,6 +189,213 @@ describe('policy', () => {
     const outcome = run({ description: 'Send my neighbour money for mowing the lawn', payee_name: 'Tom Baker', amount_usd: 40, payment_method: 'zelle' }, { policy: strict });
     expect(outcome.verdict).toBe('stop');
     expect(outcome.policy.blocked_reasons[0]).toMatch(/family's settings/);
+  });
+
+  const noWiresToOfficials = { ...DEFAULT_POLICY, blocked_methods_official_payees: ['wire' as const] };
+
+  it.each([
+    'Department of Motor Vehicles',
+    'DMV',
+    'Franchise Tax Board',
+    'State Police',
+    'Los Angeles Department of Water and Power',
+    'Georgia Power',
+    'City of Springfield',
+    'Madison County Municipal Court',
+    'Tri-County Electric Cooperative',
+  ])('treats %s as an official payee, for the floor and for the family\'s settings', (payee_name) => {
+    const wire = run({ description: `Pay ${payee_name}`, payee_name, amount_usd: 60, payment_method: 'wire', contact_channel: 'mail' }, { policy: noWiresToOfficials });
+    expect(wire.verdict).toBe('stop');
+    expect(wire.policy.blocked_reasons).toEqual(["The family's settings do not allow paying official payees with a wire transfer."]);
+    const crypto = run({ description: `Pay ${payee_name}`, payee_name, amount_usd: 60, payment_method: 'crypto', contact_channel: 'mail' });
+    expect(crypto.policy.blocked_reasons).toContain('Hold On never pays a government agency, utility or other official payee with cryptocurrency.');
+  });
+
+  it.each(['Power Washing Pros', 'Clearwater Plumbing', 'Hot Water Heater Express', 'Citywide Movers', 'County Line Feed Store', 'Light and Bright Cleaning'])(
+    'does not treat %s as official for an everyday word in its name',
+    (payee_name) => {
+      const outcome = run({ description: `Pay ${payee_name} for the job`, payee_name, amount_usd: 60, payment_method: 'wire', contact_channel: 'in_person' }, { policy: noWiresToOfficials });
+      expect(outcome.policy.blocked_reasons).toEqual([]);
+    },
+  );
+
+  it.each([
+    'U.S. Treasury',
+    'U.S. Marshals',
+    'D.M.V.',
+    'Dept. of Motor Vehicles',
+    'Dept. of Revenue',
+    'Department of Motor Vehicle',
+    'Secretary of State',
+    'E-ZPass',
+    'PSE&G',
+    'SDG&E',
+    'LADWP',
+    'Southwest Gas',
+    'Georgia Power Co.',
+    'Post Office',
+    'U.S.P.S.',
+  ])('treats %s as an official payee however it is written', (payee_name) => {
+    const wire = run({ description: `Pay the $60 fee to ${payee_name}`, payee_name, amount_usd: 60, payment_method: 'wire', contact_channel: 'mail' }, { policy: noWiresToOfficials });
+    expect(wire.verdict).toBe('stop');
+    expect(wire.policy.blocked_reasons).toContain("The family's settings do not allow paying official payees with a wire transfer.");
+    const crypto = run({ description: `Pay the $60 fee to ${payee_name}`, payee_name, amount_usd: 60, payment_method: 'crypto', contact_channel: 'mail' });
+    expect(crypto.policy.blocked_reasons).toContain('Hold On never pays a government agency, utility or other official payee with cryptocurrency.');
+  });
+
+  it.each([
+    ['Georgia Power Washing', 'wire'],
+    ['Kentucky Power Sports', 'check'],
+    ['Rocky Mountain Power Equipment', 'check'],
+    ['Smith Water and Sewer', 'check'],
+    ["Bob's Gas and Electric", 'check'],
+    ['Pacific Power Washing', 'wire'],
+    ['Tampa Electric Contractors', 'wire'],
+  ] as const)('does not treat %s as official because a utility name starts or sounds like it', (payee_name, method) => {
+    const policy = { ...DEFAULT_POLICY, blocked_methods_official_payees: [method] };
+    const outcome = run({ description: `Pay ${payee_name} for the job`, payee_name, amount_usd: 60, payment_method: method, contact_channel: 'in_person' }, { policy });
+    expect(outcome.policy.blocked_reasons).toEqual([]);
+  });
+
+  it.each([
+    ['DMV Roofing', { description: 'Pay DMV Roofing for the gutter repair', payee_name: 'DMV Roofing' }],
+    ['Rural Electric Supply', { description: 'A new generator from Rural Electric Supply', payee_name: 'Rural Electric Supply' }],
+    ['a contractor recommended by "my son at the State Police"', { description: 'Pay the deck contractor my son at the State Police recommended', payee_name: 'Smith Decks' }],
+    ['a shop "next to the post office"', { description: 'New glasses from the optician next to the post office', payee_name: 'Main Street Optical' }],
+  ] as Array<[string, CheckInput]>)('does not treat %s as official for an agency word that is not the payee', (_label, input) => {
+    const outcome = run({ ...input, amount_usd: 60, payment_method: 'wire', contact_channel: 'in_person' }, { policy: noWiresToOfficials });
+    expect(outcome.policy.blocked_reasons).toEqual([]);
+    expect(outcome).toMatchObject({ verdict: 'unknown', next_step: 'place_hold' });
+  });
+
+  it.each([
+    ['the payee is named', { description: 'Renewal notice', payee_name: 'DMV' }],
+    ['the payee is named with "the"', { description: 'Renewal notice', payee_name: 'The DMV' }],
+    ['no payee is named', { description: 'Pay the DMV registration fee' }],
+    ['no payee is named, and the State Police is', { description: 'Pay the State Police for the accident report' }],
+  ] as Array<[string, CheckInput]>)('still treats the DMV and the State Police as official when %s', (_label, input) => {
+    const wire = run({ ...input, amount_usd: 60, payment_method: 'wire', contact_channel: 'mail' }, { policy: noWiresToOfficials });
+    expect(wire.policy.blocked_reasons).toEqual(["The family's settings do not allow paying official payees with a wire transfer."]);
+  });
+
+  it.each(['The City of Los Angeles', 'the County of Fairfax', 'Georgia Power billing', 'The Georgia Power Company', 'Georgia Power customer service', 'Southwest Gas bill payment', 'Georgia Power account'])(
+    'treats %s as an official payee, with "the" in front or a billing word after the name',
+    (payee_name) => {
+      const wire = run({ description: `Pay ${payee_name}`, payee_name, amount_usd: 60, payment_method: 'wire', contact_channel: 'mail' }, { policy: noWiresToOfficials });
+      expect(wire.verdict).toBe('stop');
+      expect(wire.policy.blocked_reasons).toEqual(["The family's settings do not allow paying official payees with a wire transfer."]);
+    },
+  );
+
+  it('reads "city of" and "county of" as a government payee only at the start of the payee name', () => {
+    const noCards = { ...DEFAULT_POLICY, blocked_methods_official_payees: ['card' as const] };
+    const show = run({ description: 'Tickets to the city of Industry car show', payee_name: 'Car Show', amount_usd: 40, payment_method: 'card', contact_channel: 'in_person' }, { policy: noCards });
+    expect(show.policy.blocked_reasons).toEqual([]);
+    const city = run({ description: 'My water bill', payee_name: 'City of Springfield', amount_usd: 40, payment_method: 'card', contact_channel: 'mail' }, { policy: noCards });
+    expect(city.policy.blocked_reasons).toEqual(["The family's settings do not allow paying official payees with a credit or debit card."]);
+  });
+});
+
+describe('official payee words that are not scam signs', () => {
+  const ids = (input: CheckInput) => run(input).risk_signals.map((s) => s.id);
+
+  it.each([
+    ['a City of Hope donation by phone', { description: 'Donation to City of Hope, they called asking for support', payee_name: 'City of Hope', amount_usd: 50, payment_method: 'card', contact_channel: 'phone_call' }],
+    ['a granddaughter in the city of Chicago', { description: 'My granddaughter studies in the city of Chicago and needs help with books', payee_name: 'Emma', amount_usd: 60, payment_method: 'zelle', contact_channel: 'text' }],
+    ['the city of light', { description: 'Tour package to Paris, the city of light', payee_name: 'Rick Steves Tours', amount_usd: 90, payment_method: 'card', contact_channel: 'email' }],
+    ['a county of Fairfax chapter', { description: 'Annual dues for the garden club, county of Fairfax chapter', payee_name: 'Garden Club', amount_usd: 30, payment_method: 'check', contact_channel: 'email' }],
+    ['an emailed DMV renewal', { description: 'My DMV registration renewal reminder came by email', payee_name: 'DMV', amount_usd: 85, payment_method: 'card', contact_channel: 'email' }],
+    ['an emailed city water bill', { description: 'The City of Springfield emailed my water bill', payee_name: 'City of Springfield', amount_usd: 60, payment_method: 'card', contact_channel: 'email' }],
+  ] as Array<[string, CheckInput]>)('%s is held for the family, not stopped as government impersonation', (_label, input) => {
+    const outcome = run(input);
+    expect(outcome.risk_signals.map((s) => s.id)).not.toContain('government-impersonation-demand');
+    expect(outcome).toMatchObject({ verdict: 'unknown', next_step: 'place_hold' });
+  });
+
+  it.each([
+    ['a plumber shutting off the water main', { description: 'The plumber from Smith Water and Sewer has to shut off the water main to fix the leak, he wants a deposit', payee_name: 'Smith Water and Sewer', amount_usd: 90, payment_method: 'check', contact_channel: 'in_person' }],
+    ['an electrician disconnecting a stove', { description: "Bob's Gas and Electric is coming to disconnect the old stove and hook up the new one", payee_name: "Bob's Gas and Electric", amount_usd: 90, payment_method: 'check', contact_channel: 'phone_call' }],
+    ['a power washer turning off sprinklers', { description: 'Pacific Power Washing will turn off my sprinklers before they wash the house', payee_name: 'Pacific Power Washing', amount_usd: 90, payment_method: 'card', contact_channel: 'in_person' }],
+    ['a deck job that needs the gas grill disconnected', { description: 'Georgia Power Washing quoted the deck, they need the gas grill disconnected first', payee_name: 'Georgia Power Washing', amount_usd: 90, payment_method: 'card', contact_channel: 'phone_call' }],
+  ] as Array<[string, CheckInput]>)('%s is not a utility shutoff threat', (_label, input) => {
+    expect(ids(input)).toEqual([]);
+    expect(run(input).verdict).toBe('unknown');
+  });
+
+  it.each([
+    ["a USPS gift card for a graduation", { description: "Buy a USPS gift card for my granddaughter's graduation", payee_name: 'USPS', amount_usd: 25, payment_method: 'card', contact_channel: 'in_person' }],
+    ['postage for a birthday gift card', { description: 'Postage to mail a birthday gift card to my grandson', payee_name: 'USPS', amount_usd: 12, payment_method: 'card', contact_channel: 'in_person' }],
+  ] as Array<[string, CheckInput]>)('%s at the post office can be paid', (_label, input) => {
+    expect(run(input)).toMatchObject({ verdict: 'verified', next_step: 'pay', risk_signals: [] });
+    expect(run({ ...input, payment_method: undefined }).effective_method).toBe('unknown');
+  });
+
+  it.each([
+    ['a grandson who is a police officer', { description: "My grandson the police officer turns 30, buy him a $50 Amazon gift card for his birthday", payee_name: 'Amazon', amount_usd: 50, payment_method: 'card' }],
+    ['a granddaughter who works at the IRS', { description: 'Birthday gift card for my granddaughter who works at the IRS', payee_name: 'Starbucks', amount_usd: 25, payment_method: 'card' }],
+    ['a utility lineman', { description: 'A thank you gift card for the utility company lineman who fixed our power after the storm', payee_name: 'Home Depot', amount_usd: 40, payment_method: 'card' }],
+    ['a grandson, bought at a shop with "DMV" in its name', { description: "Buy a $50 gift card for my grandson's birthday at DMV Hardware", payee_name: 'DMV Hardware', amount_usd: 50, payment_method: 'card' }],
+  ] as Array<[string, CheckInput]>)('a present for %s is still a present, because only the payee counts', (_label, input) => {
+    expect(ids(input)).not.toContain('gift-card-payment-demand');
+    expect(run({ ...input, payment_method: undefined }).effective_method).toBe('unknown');
+  });
+
+  it('drops the present exception when the payee named is a utility outside the registry, even one the family vouched for', () => {
+    const trustedPayees = [{ name: 'Southwest Gas', normalized_name: 'southwest gas', added_by: 'Sarah Ellis', added_at: '2026-10-01T00:00:00.000Z' }];
+    const input: CheckInput = { description: 'Southwest Gas says pay the bill with gift cards as a thank you gift', payee_name: 'Southwest Gas', amount_usd: 40, payment_method: 'card' };
+    const outcome = run(input, { trustedPayees });
+    expect(outcome.verdict).toBe('stop');
+    expect(outcome.risk_signals.find((s) => s.id === 'gift-card-payment-demand')?.matched_on).toContain('payee named as utility: "southwest gas"');
+  });
+
+  it('keeps the same evidence for the demo gift card demand', () => {
+    const signal = run({ ...SCENARIOS.irsGiftCards, urgency_claims: [...SCENARIOS.irsGiftCards.urgency_claims] }).risk_signals.find((s) => s.id === 'gift-card-payment-demand');
+    expect(signal?.matched_on).toEqual(['payment method: gift_card', 'words: "gift cards"']);
+  });
+});
+
+describe('a payee the family recently said no to', () => {
+  const bill: CheckInput = { description: 'My Con Edison electric bill came in the mail', payee_name: 'Con Edison', amount_usd: 50, payment_method: 'card', contact_channel: 'mail' };
+  const deposit: CheckInput = { ...SCENARIOS.contractorDeposit, amount_usd: 80 };
+  const trustedPayees = [{ name: 'Greenleaf Roofing', normalized_name: 'greenleaf roofing', added_by: 'Sarah Ellis', added_at: '2026-10-01T00:00:00.000Z' }];
+
+  it('goes to the family again even under the limit, by registry entry or by name', () => {
+    const coned = run(bill, { recentDenials: { registryIds: ['con-edison'], names: [] } });
+    expect(coned).toMatchObject({ verdict: 'verified', next_step: 'place_hold', policy: { requires_family_approval: true, blocked: false } });
+    expect(coned.say_to_user).toBe(
+      'Con Edison is on my list of official payees. A recent payment to them was turned down, so Sarah gets a quick request to approve this one first. Nothing is paid until then.',
+    );
+    const roofer = run(deposit, { trustedPayees, recentDenials: { registryIds: [], names: ['greenleaf roofing'] } });
+    expect(roofer).toMatchObject({ verdict: 'verified', next_step: 'place_hold' });
+  });
+
+  it('does not touch other payees', () => {
+    expect(run(bill, { recentDenials: { registryIds: ['irs'], names: ['greenleaf roofing'] } }).next_step).toBe('pay');
+    expect(run(deposit, { trustedPayees, recentDenials: { registryIds: ['con-edison'], names: ['bob plumbing'] } }).next_step).toBe('pay');
+  });
+});
+
+describe('payTimeRefusal', () => {
+  const bill: CheckInput = { description: 'Con Edison bill from the mail', payee_name: 'Con Edison', amount_usd: 150, contact_channel: 'mail' };
+
+  it('puts down to the method only what the method chosen at pay time brings', () => {
+    expect(payTimeRefusal(bill, 'unknown', 'bank_transfer', ctx)).toBeUndefined();
+    expect(payTimeRefusal(bill, 'unknown', 'gift_card', ctx)).toEqual({ code: 'method_not_allowed', reason: { kind: 'policy', rule: 'floor', official_by: 'registry' } });
+    expect(payTimeRefusal(bill, 'unknown', 'zelle', ctx)).toMatchObject({ code: 'method_not_allowed', reason: { kind: 'official_fact' } });
+    expect(payTimeRefusal(SCENARIOS.contractorDeposit, 'unknown', 'gift_card', ctx)).toMatchObject({ code: 'method_not_allowed', reason: { kind: 'scam_pattern' } });
+  });
+
+  it('reports what stands whatever the method as blocked', () => {
+    const noCards = engineContext({ policy: { ...DEFAULT_POLICY, blocked_methods_all_payees: ['card'] } });
+    expect(payTimeRefusal(bill, 'card', 'card', noCards)).toEqual({ code: 'blocked', reason: { kind: 'policy', rule: 'family_all_payees' } });
+    expect(payTimeRefusal(bill, 'card', 'card', ctx)).toBeUndefined();
+  });
+
+  it('refuses another method when the words mention gift cards or cryptocurrency and no method was approved', () => {
+    const birthday: CheckInput = { description: "A gift card for my granddaughter's birthday", payee_name: 'Amazon', amount_usd: 50 };
+    expect(payTimeRefusal(birthday, 'unknown', 'card', ctx)).toEqual({ code: 'method_not_allowed', reason: { kind: 'mentioned_method', mentioned: 'gift_card' } });
+    // Approved with the method stated, the words were weighed against it at the time.
+    expect(payTimeRefusal(birthday, 'card', 'card', ctx)).toBeUndefined();
   });
 });
 

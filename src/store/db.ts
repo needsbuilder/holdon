@@ -8,6 +8,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { normalizeName } from '../domain/text.js';
 import type {
   CheckInput,
   CheckOutcome,
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS trusted_payees (
   added_by TEXT NOT NULL,
   added_at TEXT NOT NULL,
   note TEXT,
+  added_by_hold TEXT,
   PRIMARY KEY (circle_id, normalized_name)
 );
 CREATE TABLE IF NOT EXISTS checks (
@@ -202,6 +204,28 @@ export class Store {
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 3000;');
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  /** Bring a database written by an earlier version up to date. Safe to run on every start. */
+  private migrate(): void {
+    const columns = this.all('PRAGMA table_info(trusted_payees)').map((row) => row.name);
+    if (!columns.includes('added_by_hold')) this.db.exec('ALTER TABLE trusted_payees ADD COLUMN added_by_hold TEXT');
+    // Names used to be keyed on Latin letters only, so a name in another script was stored under "".
+    // Re-key every row from the name the family vouched for; a name with nothing to key on vouches for nobody.
+    const stale = this.all('SELECT circle_id, normalized_name, name FROM trusted_payees').filter(
+      (row) => normalizeName(row.name as string) !== row.normalized_name,
+    );
+    if (stale.length === 0) return;
+    this.transaction(() => {
+      for (const row of stale) {
+        const key = normalizeName(row.name as string);
+        const where = [row.circle_id as string, row.normalized_name as string];
+        if (key) this.run('UPDATE OR IGNORE trusted_payees SET normalized_name = ? WHERE circle_id = ? AND normalized_name = ?', key, ...where);
+        // Still here: nothing to key on, or the same name is already on the list under its new key.
+        this.run('DELETE FROM trusted_payees WHERE circle_id = ? AND normalized_name = ?', ...where);
+      }
+    });
   }
 
   close(): void {
@@ -312,24 +336,34 @@ export class Store {
       added_by: row.added_by as string,
       added_at: row.added_at as string,
       note: optional<string>(row.note),
+      added_by_hold: optional<string>(row.added_by_hold),
     }));
   }
 
-  addTrustedPayee(circleId: string, payee: TrustedPayee): void {
-    this.run(
-      `INSERT INTO trusted_payees (circle_id, normalized_name, name, added_by, added_at, note) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(circle_id, normalized_name) DO NOTHING`,
-      circleId,
-      payee.normalized_name,
-      payee.name,
-      payee.added_by,
-      payee.added_at,
-      payee.note ?? null,
+  /** Returns false when the family had already vouched for this name, so nothing was added. */
+  addTrustedPayee(circleId: string, payee: TrustedPayee): boolean {
+    return (
+      this.run(
+        `INSERT INTO trusted_payees (circle_id, normalized_name, name, added_by, added_at, note, added_by_hold) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(circle_id, normalized_name) DO NOTHING`,
+        circleId,
+        payee.normalized_name,
+        payee.name,
+        payee.added_by,
+        payee.added_at,
+        payee.note ?? null,
+        payee.added_by_hold ?? null,
+      ).changes > 0
     );
   }
 
   removeTrustedPayee(circleId: string, normalizedName: string): boolean {
     return this.run('DELETE FROM trusted_payees WHERE circle_id = ? AND normalized_name = ?', circleId, normalizedName).changes > 0;
+  }
+
+  /** Remove the payee that approving this hold added, if it is still on the list. */
+  removeTrustedPayeeAddedBy(circleId: string, holdId: string): boolean {
+    return this.run('DELETE FROM trusted_payees WHERE circle_id = ? AND added_by_hold = ?', circleId, holdId).changes > 0;
   }
 
   // --- checks ------------------------------------------------------------
@@ -392,15 +426,31 @@ export class Store {
     return row ? toHold(row) : undefined;
   }
 
-  findOpenHoldByCheck(checkId: string): HoldRow | undefined {
-    const row = this.get(
-      "SELECT * FROM holds WHERE check_id = ? AND status IN ('pending_family', 'approved', 'paid') ORDER BY created_at DESC LIMIT 1",
+  /** The holds for a check that are in one of these states, newest first (in the order they were written when the time is the same). */
+  listHoldsByCheck(checkId: string, statuses: readonly HoldStatus[]): HoldRow[] {
+    return this.all(
+      `SELECT * FROM holds WHERE check_id = ? AND status IN (${statuses.map(() => '?').join(', ')}) ORDER BY created_at DESC, rowid DESC`,
       checkId,
-    );
-    return row ? toHold(row) : undefined;
+      ...statuses,
+    ).map(toHold);
   }
 
-  listHolds(filter: { circle_id: string; member_id?: string; statuses?: HoldStatus[]; limit: number }): HoldRow[] {
+  /** The newest hold for a check that is in one of these states. */
+  findHoldByCheck(checkId: string, statuses: readonly HoldStatus[]): HoldRow | undefined {
+    return this.listHoldsByCheck(checkId, statuses)[0];
+  }
+
+  findOpenHoldByCheck(checkId: string): HoldRow | undefined {
+    return this.findHoldByCheck(checkId, ['pending_family', 'approved', 'paid']);
+  }
+
+  /** Holds in the circle the family denied at or after `since`. */
+  listDeniedSince(circleId: string, since: string): HoldRow[] {
+    return this.all("SELECT * FROM holds WHERE circle_id = ? AND status = 'denied' AND decision_at >= ?", circleId, since).map(toHold);
+  }
+
+  /** The circle's holds, newest first. All of them when no limit is given. */
+  listHolds(filter: { circle_id: string; member_id?: string; statuses?: HoldStatus[]; limit?: number }): HoldRow[] {
     const where = ['circle_id = ?'];
     const params: SQLInputValue[] = [filter.circle_id];
     if (filter.member_id) {
@@ -411,7 +461,8 @@ export class Store {
       where.push(`status IN (${filter.statuses.map(() => '?').join(', ')})`);
       params.push(...filter.statuses);
     }
-    params.push(filter.limit);
+    // SQLite reads a negative limit as no limit.
+    params.push(filter.limit ?? -1);
     return this.all(`SELECT * FROM holds WHERE ${where.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT ?`, ...params).map(toHold);
   }
 

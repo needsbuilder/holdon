@@ -1,6 +1,6 @@
 # Hold On
 
-**A money-safety add-on for voice assistants used by older adults.** When someone asks their assistant to pay a bill, send money or buy gift cards, or says that a caller is demanding payment, the assistant calls Hold On. Hold On checks the request against scam patterns published by official US sources, verifies the payee against a small registry of official facts, puts the request on hold, and asks a trusted family member to approve or deny it. Only an approved request to a confirmed payee is paid, and the payment is simulated.
+**A money-safety add-on for voice assistants used by older adults.** When someone asks their assistant to pay a bill, send money or buy gift cards, or says that a caller is demanding payment, the assistant calls Hold On. Hold On checks the request against scam patterns published by official US sources, verifies the payee against a small registry of official facts, and, when the payee is unknown, the amount is over the family's limit or there are warning signs, puts the request on hold and asks a trusted family member to approve or deny it. Only an approved request to a confirmed payee is paid, and the payment is simulated.
 
 Hold On is a self-hosted [Model Context Protocol](https://modelcontextprotocol.io) server (protocol version 2025-11-25 over Streamable HTTP, plus 2026-07-28) with an Agent Skill and MCP Apps cards. It was built for the Alexa+ track of the Build, Ship, Shape developer hackathon.
 
@@ -31,7 +31,7 @@ The official advice is consistent. The FTC says to "Stop and talk to someone you
 ## How it works
 
 1. **Check.** `holdon_check_request` compares the request with 12 scam patterns (gift card demands, government impersonation, "keep it secret", crypto ATMs, bail emergencies, tech support, overpayment refunds, prize fees, Medicare card fees, utility shutoff threats, "move your money to protect it", pressure to act now). Each pattern cites the official guidance it comes from.
-2. **Verify.** The payee is compared with a registry of 11 official payees (IRS, Social Security, Medicare, USPS, FTC and six large utilities): official domains, phone numbers, payment methods accepted and never used.
+2. **Verify.** The payee is compared with a registry of 11 official payees (IRS, Social Security, Medicare, USPS, FTC and six large utilities): official domains and, where on file, phone numbers and the payment methods accepted and never used.
 3. **Hold.** `holdon_place_hold` records the request and notifies the trusted contact, who sees the full context and decides in their own assistant, on an MCP Apps card, or on a plain web page.
 4. **Pay.** `holdon_pay` returns a simulated receipt, and only if the hold is approved, the payee is confirmed and the method is allowed.
 
@@ -40,7 +40,7 @@ The official advice is consistent. The FTC says to "Stop and talk to someone you
 1. **Verdicts come from rules and a registry, never from a model's guess.** The rule engine (`src/domain/engine.ts`) is a pure function: same input, same verdict. `not_in_registry` and `unknown` are valid, honest answers.
 2. **Nothing actionable from the suspicious message reaches the older adult.** Phone numbers, links and email addresses that came from a caller or message are never repeated on the member's surface. Only registry-verified official contact details are returned to them (`src/domain/text.ts`, `redactUntrusted`).
 3. **Money decisions move to the trusted contact, per policy.** Amounts at or above the family's limit, unknown payees and warning signs all need approval. Gift cards and cryptocurrency to a government agency, utility or other official payee are always blocked, and the family cannot switch that off.
-4. **Calm, no-shame language.** Every sentence a person hears is written in `src/domain/language.ts`. The request is the problem, never the person.
+4. **Calm, no-shame language.** Every sentence Hold On gives a person to hear is written in advance, in `src/domain/language.ts` and in the rules and registry it quotes. The request is the problem, never the person.
 
 ## Quickstart
 
@@ -154,7 +154,7 @@ stateDiagram-v2
   pending_family --> expired: no answer in time
   pending_family --> cancelled: member cancels
   approved --> paid: holdon_pay (simulated)
-  approved --> denied: contact changes their mind
+  approved --> denied: contact changes their mind, or denies another request to the same payee that Hold On had not stopped
   approved --> expired: approval not used in time
   approved --> cancelled: member cancels
   paid --> [*]
@@ -235,7 +235,7 @@ In a member's view, `summary` and `payee_name` have phone numbers, links and ema
 | --- | --- | --- | --- |
 | `holdon_check_request` | `{ description, payee_name?, amount_usd?, payment_method?, contact_channel?, claimed_phone?, claimed_url?, secrecy_requested?, urgency_claims? }` | `{ check_id, verdict, risk_signals, payee, policy, say_to_user, next_step: "place_hold" \| "pay" \| "decline", interpreted: { payment_method, payment_method_source: "input" \| "inferred" \| "unknown", contact_channel }, clarification?: { field: "payment_method" \| "contact_channel", status: "answered" \| "declined" \| "ask_user", answer?, question? } }` | Read-only. May ask one question by MCP form elicitation. |
 | `holdon_verify_payee` | `{ name, phone?, url?, address? }` | `Payee & { say_to_user }` | Read-only. |
-| `holdon_place_hold` | `{ check_id?, summary, amount_usd?, payee_name?, payment_method? }` | `{ hold_id, status, blocked, notified: { name, relationship?, via: string[] }[], expires_at, say_to_user, next_step: "wait" }` | Notifies the contact. Same check, same hold. Card: hold. |
+| `holdon_place_hold` | `{ check_id?, summary, amount_usd?, payee_name?, payment_method? }` | `{ hold_id, status, blocked, notified: { name, relationship?, via: string[] }[], expires_at, say_to_user, next_step: "wait" \| "pay" \| "none" }` | Notifies the contact. Same check, same hold: one that is waiting, approved or paid is returned as it stands, with its `next_step`. Card: hold. |
 | `holdon_get_hold` | `{ hold_id }` | `MemberHold` | Read-only. Card: hold. |
 | `holdon_list_holds` | `{ status?: HoldStatus \| "open" \| "all", limit?: 1..50 }` | `{ holds: MemberHold[], count, say_to_user }` | Read-only. `open` is pending or approved. |
 | `holdon_wait_for_decision` | `{ hold_id, timeout_seconds?: 1..50 }` (default 20) | `MemberHold & { waited_seconds, timed_out }` | Sends progress notifications when the call has a progress token. Card: hold. |
@@ -255,7 +255,7 @@ In a member's view, `summary` and `payee_name` have phone numbers, links and ema
 | Tool | Input | Output | Notes |
 | --- | --- | --- | --- |
 | `holdon_family_inbox` | `{ status?: "pending" \| "all", limit?: 1..50 }` | `{ holds: FamilyHold[], count, say_to_user }` | Read-only. Card: approval. |
-| `holdon_family_decide` | `{ hold_id, decision: "approve" \| "deny", note?, trust_payee? }` | `{ hold_id, status, decision: Decision, payee_status, trusted_payee_added, say_to_user }` | A stopped hold can only be denied (`blocked`). A payee outside the registry needs `trust_payee: true` (`payee_not_verified`). Card: approval. |
+| `holdon_family_decide` | `{ hold_id, decision: "approve" \| "deny", note?, trust_payee? }` | `{ hold_id, status, decision: Decision, payee_status, trusted_payee_added, say_to_user }` | A stopped hold can only be denied (`blocked`). A payee outside the registry needs `trust_payee: true` (`payee_not_verified`). A denial also withdraws other approvals, not yet paid, for the same payee, unless the denied request was one Hold On stopped. Card: approval. |
 | `holdon_update_policy` | `{ approval_threshold_usd?: 0..10000, blocked_methods_official_payees?, blocked_methods_all_payees?, hold_expiry_hours?: 1..168, notify_on_stop?, remove_trusted_payee? }` (at least one) | `{ circle: Circle, changed: string[], say_to_user }` | |
 | `holdon_get_circle` | `{}` | `{ circle: Circle }` | Read-only. |
 
@@ -391,6 +391,7 @@ npm run typecheck
 - **Simulated payments only.** There is no payment rail. In a real deployment, payment would be the host platform's own purchasing capability, with Hold On as the gate.
 - **A small registry.** Eleven payees, checked on one date. Phone numbers and policies change; the `checked` date is on every fact for that reason. Regional utilities are represented by six large ones. Duke Energy has no phone number on file because its main site refused automated requests.
 - **Word lists are blunt.** The patterns match fixed English phrases and structured fields. They miss paraphrases and other languages, and can flag an ordinary request (anything involving cryptocurrency is stopped, for example). The structured fields (`payment_method`, `contact_channel`, `secrecy_requested`, `urgency_claims`) are more reliable than the description text, and they depend on the assistant filling them in honestly.
+- **Payees outside the registry are told apart by name.** "Greenleaf Roofing" and "Greenleaf Roofing LLC" are different payees for a vouch and for a denial.
 - **A name match is a claim, not proof.** "Con Edison" by name resolves to the official record so that money can only go to the real payee. It does not prove that the caller was Con Edison.
 - **One trusted contact decides.** Notifications go to the event stream, the inbox tool, the server log and an optional webhook. There is no SMS, email or push delivery, and no second approver.
 - **Demo authentication.** Static bearer tokens, no OAuth, no rate limiting, no audit export. Sessions for 2025-era clients are kept in memory in one process.
@@ -440,7 +441,7 @@ Read on 2026-10-11. Quotes and dates are in the data files.
 ## Hackathon notes
 
 - [docs/hackathon/friction-log.md](docs/hackathon/friction-log.md): what got in the way while building this, with error text and versions.
-- [docs/hackathon/friction-log-overview.md](docs/hackathon/friction-log-overview.md): the ten entries that cost the most across Hold On and [Voicestage](https://github.com/needsbuilder/voicestage), in the hackathon's format.
+- [docs/hackathon/friction-log-overview.md](docs/hackathon/friction-log-overview.md): the blocker and the major entries from Hold On and [Voicestage](https://github.com/needsbuilder/voicestage), plus V-08, in the hackathon's format.
 - [docs/hackathon/product-feedback.md](docs/hackathon/product-feedback.md): feedback on the MCP specification, the TypeScript SDK, MCP Apps and Agent Skills, and feature requests.
 
 No Alexa+ developer tooling was available to hackathon participants. Hold On has been run against the MCP SDK's client, the MCP Apps host bridge and a browser-based simulator ([Voicestage](https://github.com/needsbuilder/voicestage)), never against an Alexa+ device or runtime.

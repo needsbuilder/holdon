@@ -10,20 +10,22 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { evaluateRequest, explainReasons, pickClarifyingQuestion, policyMethodBlocks, type EngineContext } from './domain/engine.js';
+import { evaluateRequest, explainReasons, payTimeRefusal, pickClarifyingQuestion, type EngineContext } from './domain/engine.js';
 import {
   sayDecision,
   sayHoldPlaced,
   sayHoldStatus,
   sayInbox,
   sayPaid,
+  sayPaymentRefused,
   sayVerifyPayee,
 } from './domain/language.js';
-import { verifyPayee, type PayeeQuery, type Registry } from './domain/registry.js';
+import { findTrustedPayee, verifyPayee, type PayeeQuery, type Registry } from './domain/registry.js';
 import type { RuleSet } from './domain/rules.js';
-import { formatUsd, fromCents, methodLabel, normalizeName, redactUntrusted, toCents } from './domain/text.js';
+import { formatUsd, fromCents, normalizeName, redactUntrusted, toCents } from './domain/text.js';
 import {
   DEFAULT_POLICY,
+  HOLD_STATUSES,
   PAYMENT_METHODS,
   POLICY_FLOOR_BLOCKED_METHODS,
   type CheckInput,
@@ -162,6 +164,9 @@ export interface ServiceOptions {
   clock?: () => Date;
 }
 
+/** The note on an approval that a later "no" to the same payee withdrew. The "no" keeps its own note. */
+const WITHDRAWN_NOTE = 'This approval was withdrawn because a later payment to the same payee was turned down.';
+
 const UNTRUSTED_WARNING =
   'These details came from the message or caller and are not verified. Do not call the number or open the link; use the official contact details instead.';
 
@@ -227,13 +232,55 @@ export class HoldOnService {
   }
 
   private engineContext(circleId: string): EngineContext {
+    const policy = this.policyOf(circleId);
     return {
       registry: this.registry,
       rules: this.rules,
-      policy: this.policyOf(circleId),
+      policy,
       trustedPayees: this.store.listTrustedPayees(circleId),
       contactName: this.primaryContact(circleId)?.name,
+      recentDenials: this.recentDenials(circleId, policy),
     };
+  }
+
+  /**
+   * Holds in the circle the family said no to at or after `since`, leaving out stopped requests: a stopped request
+   * can only be denied, so that "no" says nothing about the real payee it named.
+   */
+  private payeeDenialsSince(circleId: string, since: string): HoldRow[] {
+    return this.store.listDeniedSince(circleId, since).filter((hold) => !hold.blocked);
+  }
+
+  /** Payees the family said no to within the last hold expiry window, as the engine compares them. */
+  private recentDenials(circleId: string, policy: Policy): { registryIds: string[]; names: string[] } {
+    const since = new Date(this.clock().getTime() - policy.hold_expiry_hours * 3_600_000).toISOString();
+    const registryIds: string[] = [];
+    const names: string[] = [];
+    for (const hold of this.payeeDenialsSince(circleId, since)) {
+      const registryId = this.store.getCheck(hold.check_id)?.outcome.payee.registry_id;
+      const name = normalizeName(hold.payee_name ?? '');
+      if (registryId) registryIds.push(registryId);
+      else if (name) names.push(name);
+    }
+    return { registryIds, names };
+  }
+
+  /** Who a hold pays, compared the way recent denials are: its registry entry, or its name outside the registry. */
+  private payeeKey(hold: HoldRow): string | undefined {
+    const registryId = this.store.getCheck(hold.check_id)?.outcome.payee.registry_id;
+    if (registryId) return `registry:${registryId}`;
+    const name = normalizeName(hold.payee_name ?? '');
+    return name ? `name:${name}` : undefined;
+  }
+
+  /** A "no" to the same payee given at or after this hold's approval, within the last hold expiry window. */
+  private laterDenial(hold: HoldRow): HoldRow | undefined {
+    const payee = this.payeeKey(hold);
+    if (!payee) return undefined;
+    const windowStart = new Date(this.clock().getTime() - this.policyOf(hold.circle_id).hold_expiry_hours * 3_600_000).toISOString();
+    const approvedAt = hold.decision_at ?? hold.created_at;
+    const since = approvedAt > windowStart ? approvedAt : windowStart;
+    return this.payeeDenialsSince(hold.circle_id, since).find((denied) => denied.id !== hold.id && this.payeeKey(denied) === payee);
   }
 
   private emit(type: HoldEventType, circleId: string, holdId?: string): void {
@@ -301,8 +348,12 @@ export class HoldOnService {
           `The ${changed.join(' and ')} given here ${changed.length === 1 ? 'differs' : 'differ'} from what was checked. Call holdon_check_request again with the new details, then place the hold with the new check_id.`,
         );
       }
-      const existing = this.store.findOpenHoldByCheck(check.id);
-      if (existing && existing.status === 'pending_family') {
+      // One check is one payment, so it has at most one live hold. Asking again while the family has not answered,
+      // after they said yes, or after it was paid returns that hold. A second hold beside an approved one would let
+      // a later "no" leave the earlier "yes" standing.
+      const live = this.store.findOpenHoldByCheck(check.id);
+      const existing = live && this.applyExpiry(live);
+      if (existing && existing.status !== 'expired') {
         return { hold: existing, notified: this.notifiedList(contacts), reused: true };
       }
     } else {
@@ -462,6 +513,8 @@ export class HoldOnService {
     const contactFirst = contact?.name.split(' ')[0] ?? 'your trusted contact';
 
     let hold: HoldRow;
+    // Set when the family's settings approve this payment here and now. That hold is written only if the payment is made.
+    let approvedByPolicy = false;
     if (input.hold_id) {
       hold = this.loadHold(principal, input.hold_id);
     } else {
@@ -469,7 +522,10 @@ export class HoldOnService {
       if (!check || check.member_id !== principal.user_id) {
         throw new HoldOnError('not_found', `No check with id "${input.check_id}" was found for ${principal.name}.`);
       }
-      const existing = this.store.findOpenHoldByCheck(check.id);
+      // Once a hold exists for this check, the newest one decides, whatever its state: a later "no" outweighs an
+      // earlier "yes", and a payment the family denied, or a hold that was cancelled or ran out, is never paid by
+      // coming back with the check_id instead. A hold placed again after a denial and then approved is newer, so it decides.
+      const existing = this.store.findHoldByCheck(check.id, HOLD_STATUSES);
       if (existing) {
         hold = this.applyExpiry(existing);
       } else {
@@ -501,7 +557,7 @@ export class HoldOnService {
           expires_at: new Date(now.getTime() + this.policyOf(principal.circle_id).hold_expiry_hours * 3_600_000).toISOString(),
           updated_at: now.toISOString(),
         };
-        this.store.insertHold(hold);
+        approvedByPolicy = true;
       }
     }
 
@@ -523,19 +579,27 @@ export class HoldOnService {
       default:
         break;
     }
+    // A later "no" to the same payee outweighs this "yes", even on another check: the same payment may have been
+    // checked twice. A denial withdraws such approvals itself; this also covers any an earlier version left standing.
+    const laterNo = this.laterDenial(hold);
+    if (laterNo) {
+      throw new HoldOnError('denied', `${laterNo.decision_by_name ?? contactFirst} later said no to a payment to this payee, so this approval no longer stands. Nothing has been paid.`);
+    }
 
     const check = this.store.getCheck(hold.check_id)!;
     const trusted = this.store.listTrustedPayees(principal.circle_id);
     const registryId = check.outcome.payee.registry_id;
     const entry = registryId ? this.registry.byId.get(registryId) : undefined;
-    const familyTrusted = hold.payee_name ? trusted.find((t) => t.normalized_name === normalizeName(hold.payee_name!)) : undefined;
+    // The vouch must be for this very name: the trusted entry's own name has to match the hold's, not just its stored key.
+    const familyTrusted = findTrustedPayee(trusted, hold.payee_name);
     if (!entry && !familyTrusted) {
       throw new HoldOnError(
         'payee_not_verified',
         `Hold On only pays payees it can confirm: an official payee from the registry, or one ${contactFirst} has vouched for. This payee is neither, so nothing has been paid.`,
       );
     }
-    const payeeName = entry?.name ?? familyTrusted!.name;
+    // Shown on the receipt and read aloud, so a vouched-for name keeps no phone number or link the caller gave.
+    const payeeName = entry?.name ?? redactUntrusted(familyTrusted!.name);
 
     if (hold.amount_cents === undefined) {
       throw new HoldOnError('amount_required', 'No amount was given for this payment, so it cannot be paid. Start again with holdon_check_request and include the amount.');
@@ -544,17 +608,19 @@ export class HoldOnService {
     let method = hold.payment_method;
     if (method === 'unknown') {
       if (!input.payment_method || input.payment_method === 'unknown') {
-        throw new HoldOnError('method_required', 'I need to know how to pay before I can do this. Call holdon_pay again with payment_method set to card, bank_transfer or check.');
+        throw new HoldOnError(
+          'method_required',
+          'Before I can pay, I need to know how you were asked to pay. Nothing has been paid. Ask how the payment was requested, then call holdon_pay again with that payment_method.',
+        );
       }
       method = input.payment_method;
     }
-    const never = entry?.never_methods.find((fact) => fact.methods.includes(method));
-    const blocks = policyMethodBlocks(this.policyOf(principal.circle_id), method, Boolean(entry));
-    if (never) {
-      throw new HoldOnError('method_not_allowed', `${entry!.name} does not take payment by ${methodLabel(method)}, so this cannot be paid that way. Nothing has been paid.`);
-    }
-    if (blocks.length > 0) {
-      throw new HoldOnError('method_not_allowed', `${blocks[0]} Nothing has been paid.`);
+    // The method that will actually be used goes through the same checks as the request did, with today's rules,
+    // registry and settings, which also cover agencies and utilities outside the registry. A method first given
+    // here gets no less scrutiny than one given at the start.
+    const refusal = payTimeRefusal(check.input, hold.payment_method, method, this.engineContext(principal.circle_id));
+    if (refusal) {
+      throw new HoldOnError(refusal.code, sayPaymentRefused({ method, payeeName, reason: refusal.reason, byMethod: refusal.code === 'method_not_allowed' }));
     }
 
     const now = this.now();
@@ -569,6 +635,11 @@ export class HoldOnService {
       created_at: now,
     };
     const paid = this.store.transaction(() => {
+      if (approvedByPolicy) {
+        // Another request may have held or paid this check in the meantime; that hold decides instead.
+        if (this.store.findHoldByCheck(hold.check_id, HOLD_STATUSES)) return false;
+        this.store.insertHold(hold);
+      }
       const changed = this.store.updateHold(hold.id, ['approved'], {
         status: 'paid',
         payment_method: method,
@@ -580,7 +651,7 @@ export class HoldOnService {
     });
     if (!paid) {
       // Another request paid, cancelled or expired it in the meantime; report the current truth.
-      return this.pay(principal, { hold_id: hold.id });
+      return this.pay(principal, approvedByPolicy ? { check_id: hold.check_id } : { hold_id: hold.id });
     }
     this.emit('hold.paid', hold.circle_id, hold.id);
     return { receipt, hold: this.store.getHold(hold.id)! };
@@ -616,26 +687,29 @@ export class HoldOnService {
     if (check.outcome.payee.status === 'not_in_registry' && !hold.payee_name) {
       return 'No payee was named, so there is nothing specific to approve. Deny it, or ask your family member to start again with the payee name.';
     }
+    // A vouch is remembered by name. A name with no letter or digit in any script would stand for nobody in particular.
+    if (!check.outcome.payee.registry_id && hold.payee_name && !normalizeName(hold.payee_name)) {
+      return 'The payee name has no letters or numbers, so there is no one specific to approve. Deny it, or ask your family member to start again with the payee name.';
+    }
     return undefined;
   }
 
   private needsTrust(hold: HoldRow, check: CheckRow): boolean {
     if (check.outcome.payee.registry_id) return false;
     if (!hold.payee_name) return false;
-    const trusted = this.store.listTrustedPayees(hold.circle_id);
-    return !trusted.some((t) => t.normalized_name === normalizeName(hold.payee_name!));
+    return !findTrustedPayee(this.store.listTrustedPayees(hold.circle_id), hold.payee_name);
   }
 
   familyDecide(
     principal: Principal,
     input: { hold_id: string; decision: 'approve' | 'deny'; note?: string; trust_payee?: boolean },
-  ): { hold: HoldRow; trustedPayeeAdded: boolean } {
+  ): { hold: HoldRow; trustedPayeeAdded: boolean; trustedPayeeRemoved: boolean; approvalsWithdrawn: number } {
     this.requireRole(principal, 'contact', 'approve or deny a hold');
     const hold = this.loadHold(principal, input.hold_id);
     const check = this.store.getCheck(hold.check_id)!;
     const target: HoldStatus = input.decision === 'approve' ? 'approved' : 'denied';
 
-    if (hold.status === target) return { hold, trustedPayeeAdded: false };
+    if (hold.status === target) return { hold, trustedPayeeAdded: false, trustedPayeeRemoved: false, approvalsWithdrawn: 0 };
     const revoking = hold.status === 'approved' && target === 'denied';
     if (hold.status !== 'pending_family' && !revoking) {
       throw new HoldOnError('already_decided', `This hold is already ${statusWord(hold.status)}, so it can no longer be ${input.decision === 'approve' ? 'approved' : 'denied'}.`);
@@ -658,33 +732,58 @@ export class HoldOnService {
     }
 
     const policy = this.policyOf(hold.circle_id);
+    const decision = {
+      decision_by: principal.user_id,
+      decision_by_name: principal.name,
+      decision_at: now.toISOString(),
+      decision_note: input.note,
+      updated_at: now.toISOString(),
+    };
+    let trustedPayeeAdded = false;
+    let trustedPayeeRemoved = false;
+    const withdrawn: string[] = [];
     // The decision and the vouch are written together, or not at all.
     const changed = this.store.transaction(() => {
       const updated = this.store.updateHold(hold.id, [hold.status], {
         status: target,
-        decision_by: principal.user_id,
-        decision_by_name: principal.name,
-        decision_at: now.toISOString(),
-        decision_note: input.note,
+        ...decision,
         // An approval is good for one more expiry window, then lapses unused.
         ...(target === 'approved' ? { expires_at: new Date(now.getTime() + policy.hold_expiry_hours * 3_600_000).toISOString() } : {}),
-        updated_at: now.toISOString(),
       });
       if (updated && vouch) {
-        this.store.addTrustedPayee(hold.circle_id, {
+        trustedPayeeAdded = this.store.addTrustedPayee(hold.circle_id, {
           name: hold.payee_name!,
           normalized_name: normalizeName(hold.payee_name!),
           added_by: principal.name,
           added_at: now.toISOString(),
           note: input.note,
+          added_by_hold: hold.id,
         });
+      }
+      // A stopped request can only be denied, so that "no" says nothing about the real payee it named and withdraws nothing.
+      if (updated && target === 'denied' && !hold.blocked) {
+        // "No" also withdraws every other approval still waiting to be paid for the same payee: of the same check (an
+        // earlier version could place a second hold beside an approved one), and of another check, as when the same
+        // payment was checked twice. Withdrawing an approval also withdraws the vouch that came with it. A withdrawn
+        // approval gets a note of its own: the "no" note was written about another request.
+        const payee = this.payeeKey(hold);
+        const approved = this.store.listHolds({ circle_id: hold.circle_id, statuses: ['approved'] });
+        for (const other of approved) {
+          const samePayment = other.check_id === hold.check_id || (payee !== undefined && this.payeeKey(other) === payee);
+          if (!samePayment || other.expires_at <= decision.decision_at) continue;
+          if (this.store.updateHold(other.id, ['approved'], { status: 'denied', ...decision, decision_note: WITHDRAWN_NOTE })) withdrawn.push(other.id);
+        }
+        for (const id of revoking ? [hold.id, ...withdrawn] : withdrawn) {
+          if (this.store.removeTrustedPayeeAddedBy(hold.circle_id, id)) trustedPayeeRemoved = true;
+        }
       }
       return updated;
     });
-    const trustedPayeeAdded = changed && vouch;
     if (!changed) return this.familyDecide(principal, input);
     this.emit('hold.decided', hold.circle_id, hold.id);
-    return { hold: this.store.getHold(hold.id)!, trustedPayeeAdded };
+    for (const id of withdrawn) this.emit('hold.decided', hold.circle_id, id);
+    if (trustedPayeeRemoved) this.emit('policy.updated', hold.circle_id);
+    return { hold: this.store.getHold(hold.id)!, trustedPayeeAdded, trustedPayeeRemoved, approvalsWithdrawn: withdrawn.length };
   }
 
   getCircle(principal: Principal): CircleView {
@@ -774,9 +873,7 @@ export class HoldOnService {
 
   private baseView(hold: HoldRow, check: CheckRow) {
     const receipt = hold.status === 'paid' ? this.store.getReceiptByHold(hold.id) : undefined;
-    const trusted = hold.payee_name
-      ? this.store.listTrustedPayees(hold.circle_id).some((t) => t.normalized_name === normalizeName(hold.payee_name!))
-      : false;
+    const trusted = Boolean(findTrustedPayee(this.store.listTrustedPayees(hold.circle_id), hold.payee_name));
     const payeeStatus: PayeeStatus =
       check.outcome.payee.status === 'not_in_registry' && trusted ? 'family_trusted' : check.outcome.payee.status;
     return {
@@ -823,6 +920,7 @@ export class HoldOnService {
         blocked: hold.blocked,
         contactName: contact?.name,
         deciderName: hold.decision_by === 'policy' ? undefined : hold.decision_by_name,
+        decidedByPolicy: hold.decision_by === 'policy',
         note: hold.decision_note && hold.decision_by !== 'policy' ? hold.decision_note : undefined,
         payeeName,
         amount_usd: base.amount_usd,
@@ -833,6 +931,8 @@ export class HoldOnService {
 
   placedMessage(hold: HoldRow): string {
     const view = this.memberHoldView(hold);
+    // Placing a hold for a check the family already answered returns that hold; say where it stands.
+    if (hold.status !== 'pending_family') return view.say_to_user;
     return sayHoldPlaced({
       status: hold.status,
       blocked: hold.blocked,
@@ -874,7 +974,7 @@ export class HoldOnService {
     };
   }
 
-  decisionMessage(hold: HoldRow, decision: 'approve' | 'deny', trustedPayeeAdded: boolean): string {
+  decisionMessage(hold: HoldRow, decision: 'approve' | 'deny', trustedPayeeAdded: boolean, trustedPayeeRemoved = false, approvalsWithdrawn = 0): string {
     const member = this.store.getUser(hold.member_id);
     return sayDecision({
       decision,
@@ -882,6 +982,8 @@ export class HoldOnService {
       payeeName: hold.payee_name,
       amount_usd: hold.amount_cents === undefined ? undefined : fromCents(hold.amount_cents),
       trustedPayee: trustedPayeeAdded,
+      trustedPayeeRemoved,
+      approvalsWithdrawn,
     });
   }
 

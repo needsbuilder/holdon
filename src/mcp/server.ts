@@ -205,7 +205,7 @@ function registerMemberTools(server: McpServer, service: HoldOnService, principa
       {
         title: 'Place a hold and ask family',
         description:
-          'Put a money request on hold and notify the trusted family contact, who approves or denies it. Nothing is paid. Pass the check_id from holdon_check_request so the contact sees the full context. Calling it twice for the same check returns the same hold.',
+          'Put a money request on hold and notify the trusted family contact, who approves or denies it. Nothing is paid. Pass the check_id from holdon_check_request so the contact sees the full context. Calling it again for the same check returns the same hold while it is waiting, approved or paid; follow its next_step.',
         inputSchema: S.PlaceHoldInput,
         outputSchema: S.PlaceHoldOutput,
         annotations: { title: 'Place a hold and ask family', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -224,7 +224,8 @@ function registerMemberTools(server: McpServer, service: HoldOnService, principa
           notified,
           expires_at: hold.expires_at,
           say_to_user: say,
-          next_step: 'wait' as const,
+          // A hold placed again for an answered check is returned as it stands.
+          next_step: service.memberHoldView(hold).next_step,
         },
         `${say}\n\nhold_id: ${hold.id} | status: ${hold.status} | notified: ${notified.map((n) => n.name).join(', ')} | expires_at: ${hold.expires_at}`,
       );
@@ -402,7 +403,7 @@ function registerContactTools(server: McpServer, service: HoldOnService, princip
       {
         title: 'Approve or deny a hold',
         description:
-          'Approve or deny a hold for your family member. A request that Hold On stopped can only be denied. Approving a payee that is not in the official registry needs trust_payee: true, which records that you personally know them. Your note is read to your family member. Repeating the same decision is harmless; an approval can be changed to a denial until it is paid.',
+          'Approve or deny a hold for your family member. A request that Hold On stopped can only be denied. Approving a payee that is not in the official registry needs trust_payee: true, which records that you personally know them. Your note is read to your family member. Repeating the same decision is harmless; an approval can be changed to a denial until it is paid. A denial also withdraws any other approval, not yet paid, of a payment to the same payee, unless the request you deny is one Hold On stopped.',
         inputSchema: S.FamilyDecideInput,
         outputSchema: S.FamilyDecideOutput,
         annotations: { title: 'Approve or deny a hold', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -411,9 +412,9 @@ function registerContactTools(server: McpServer, service: HoldOnService, princip
       UI.approval,
     ),
     guard('holdon_family_decide', (args) => {
-      const { hold, trustedPayeeAdded } = service.familyDecide(principal, args);
+      const { hold, trustedPayeeAdded, trustedPayeeRemoved, approvalsWithdrawn } = service.familyDecide(principal, args);
       const view = service.familyHoldView(hold, principal.user_id);
-      const say = service.decisionMessage(hold, args.decision, trustedPayeeAdded);
+      const say = service.decisionMessage(hold, args.decision, trustedPayeeAdded, trustedPayeeRemoved, approvalsWithdrawn);
       return ok(
         {
           hold_id: hold.id,

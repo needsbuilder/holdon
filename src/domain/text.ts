@@ -6,16 +6,62 @@
 
 const APOSTROPHES = /['‘’‛′`]/g;
 
-/** Lower-case, drop apostrophes, turn every other non-alphanumeric run into one space, and pad with spaces. */
+// Cyrillic, Greek and other letters that look like Latin ones (in either case), so "bitcoіn" with a Cyrillic "і"
+// still reads as bitcoin, and "gıft" with a dotless "ı" as gift.
+const LOOKALIKES: Record<string, string> = {
+  а: 'a', в: 'b', е: 'e', і: 'i', ј: 'j', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x', ѕ: 's', ԁ: 'd', һ: 'h', ԛ: 'q', ԝ: 'w', ӏ: 'l',
+  α: 'a', β: 'b', ε: 'e', ζ: 'z', η: 'h', ι: 'i', κ: 'k', μ: 'm', ν: 'v', ο: 'o', ρ: 'p', τ: 't', υ: 'u', χ: 'x',
+  ı: 'i', ɡ: 'g',
+};
+const LOOKALIKE_LETTERS = new RegExp(`[${Object.keys(LOOKALIKES).join('')}]`, 'g');
+// "U.S.", "D.M.V." and "I.R.S." are the words "us", "dmv" and "irs".
+const DOTTED_INITIALS = /(?<![a-z0-9])[a-z](?:\.[a-z])+\.?(?![a-z0-9])/g;
+// Short forms read as the word they stand for.
+const ABBREVIATIONS: Record<string, string> = { dept: 'department', govt: 'government' };
+
+// Invisible format characters: zero-width spaces and joiners, soft hyphens, direction marks.
+const INVISIBLE = /\p{Cf}/gu;
+// Separates the two readings of a text that has invisible characters in it. No phrase can match across it.
+const READING_BREAK = '|';
+
+/**
+ * Text form used for matching words: accents and other marks dropped,
+ * letters that only look Latin read as Latin, lower-cased, dotted initials
+ * joined, apostrophes dropped, every other non-alphanumeric run turned into one
+ * space, and padded with spaces. Only ever compared, never shown.
+ *
+ * An invisible character may hide inside a word (a zero-width space in "gift")
+ * or stand between two words (zero-width spaces for the spaces in "keep it
+ * secret"), so a text that has one is read both ways, with them dropped and
+ * with them as spaces. Both readings are kept, separated so that no phrase
+ * matches across them (see {@link readings}).
+ */
 export function normalizeText(value: string): string {
-  const core = value
-    .normalize('NFKC')
+  const joined = normalizeReading(value.replace(INVISIBLE, ''));
+  if (!/\p{Cf}/u.test(value)) return ` ${joined} `;
+  const apart = normalizeReading(value.replace(INVISIBLE, ' '));
+  return joined === apart ? ` ${joined} ` : ` ${joined} ${READING_BREAK} ${apart} `;
+}
+
+/** The readings in a text produced by {@link normalizeText}, each padded with spaces. Usually just one. */
+export function readings(normalizedText: string): string[] {
+  return normalizedText.split(READING_BREAK).map((reading) => ` ${reading.trim()} `);
+}
+
+function normalizeReading(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\p{M}\p{Cf}]/gu, '')
     .toLowerCase()
+    .replace(LOOKALIKE_LETTERS, (letter) => LOOKALIKES[letter]!)
+    .replace(DOTTED_INITIALS, (initials) => initials.replace(/\./g, ''))
     .replace(APOSTROPHES, '')
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-  return ` ${core} `;
+    .trim()
+    .split(' ')
+    .map((word) => ABBREVIATIONS[word] ?? word)
+    .join(' ');
 }
 
 /** Whole-word phrase test against text produced by {@link normalizeText}. */
@@ -24,9 +70,26 @@ export function containsPhrase(normalizedText: string, phrase: string): boolean 
   return needle.trim().length > 0 && normalizedText.includes(needle);
 }
 
-/** Name form used for registry and trusted-payee lookups. */
+/**
+ * Name form used for trusted-payee lookups: letters and digits in any script,
+ * lower-cased, with every other run turned into one space. For names in plain
+ * Latin letters it gives the same key as earlier versions did. Unlike
+ * {@link normalizeText} it keeps accents and never reads one letter as
+ * another, so a look-alike name never shares a vouched-for name's key.
+ *
+ * Combining marks are kept with their letter, so names in scripts that write
+ * vowels as marks stay distinct. A name with no letter or digit at all comes
+ * back empty: it names nobody and must never match a trusted payee.
+ */
 export function normalizeName(value: string): string {
-  return normalizeText(value).trim();
+  const name = value
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(APOSTROPHES, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
+    .trim();
+  return /[\p{L}\p{N}]/u.test(name) ? name : '';
 }
 
 const KEYPAD: Record<string, string> = {
@@ -94,15 +157,55 @@ export function hostMatchesDomain(host: string, domain: string): boolean {
 
 const EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
 const URL_WITH_SCHEME = /\b(?:https?:\/\/|www\.)[^\s<>"')]+/gi;
-const BARE_DOMAIN =
-  /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|net|org|gov|edu|info|biz|co|us|io|me|ly|app|xyz|top|site|online|link|click|shop|live|cc|ru|cn|tk|support|help|pay|money|cash)\b(?:\/[^\s<>"')]*)?/gi;
+// Real top-level domains: common generic ones and every country code. Words that end a name, such as "Smith" in
+// "Dr.Smith" or "Crew" in "J.Crew", are not top-level domains, so those names are left alone.
+const TOP_LEVEL_DOMAINS = [
+  'com', 'net', 'org', 'gov', 'edu', 'mil', 'int', 'info', 'biz', 'name', 'pro', 'mobi', 'asia', 'tel', 'travel', 'jobs', 'aero', 'coop', 'museum',
+  'app', 'dev', 'page', 'xyz', 'top', 'site', 'online', 'website', 'store', 'shop', 'tech', 'space', 'live', 'life', 'world', 'today', 'news',
+  'email', 'link', 'click', 'help', 'support', 'services', 'solutions', 'agency', 'company', 'business', 'center', 'group', 'network', 'systems',
+  'zone', 'cloud', 'digital', 'global', 'media', 'finance', 'financial', 'money', 'cash', 'pay', 'credit', 'loan', 'loans', 'tax', 'claims',
+  'insurance', 'legal', 'law', 'lawyer', 'attorney', 'exchange', 'trade', 'market', 'markets', 'delivery', 'express', 'repair', 'plumbing',
+  'roofing', 'contractors', 'construction', 'builders', 'homes', 'realty', 'energy', 'solar', 'health', 'clinic', 'care', 'charity', 'foundation',
+  'events', 'tickets', 'tours', 'deals', 'discount', 'sale', 'coupons', 'review', 'reviews', 'bid', 'win', 'vip', 'club', 'fun', 'buzz', 'guru',
+  'icu', 'cyou', 'monster', 'quest', 'sbs', 'cfd', 'bond', 'lol', 'zip', 'mov', 'llc', 'inc', 'ltd', 'gmbh', 'secure', 'host', 'hosting',
+  'stream', 'download',
+  ...('ac ad ae af ag ai al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj bm bn bo br bs bt bw by bz ca cc cd cf cg ch ci ck cl cm cn ' +
+    'co cr cu cv cw cx cy cz de dj dk dm do dz ec ee eg er es et eu fi fj fk fm fo fr ga gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk ' +
+    'hm hn hr ht hu id ie il im in io iq ir is it je jm jo jp ke kg kh ki km kn kp kr kw ky kz la lb lc li lk lr ls lt lu lv ly ma mc md me mg ' +
+    'mh mk ml mm mn mo mp mq mr ms mt mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf pg ph pk pl pm pn pr ps pt pw py qa re ' +
+    'ro rs ru rw sa sb sc sd se sg sh si sk sl sm sn so sr ss st su sv sx sy sz tc td tf tg th tj tk tl tm tn to tr tt tv tw tz ua ug uk us uy ' +
+    'uz va vc ve vg vi vn vu wf ws ye yt za zm zw').split(' '),
+];
+// Endings that never end an ordinary name, so they count in any case, as in "Greenleaf.Store" or "IRS-Help.AI".
+const ANY_CASE_ENDINGS = [
+  'com', 'net', 'org', 'gov', 'edu', 'info', 'biz', 'app', 'xyz', 'top', 'site', 'online', 'website', 'store', 'shop', 'live', 'help', 'support',
+  'services', 'finance', 'money', 'pay', 'link', 'click', 'ai', 'io', 'icu', 'cyou', 'sbs', 'cfd', 'cc', 'ru', 'cn', 'tk',
+];
+// Country codes that are also short English words ("it.Is", "Acct.No"). Like any word, they count as an ending only
+// in lower case with a path after them, as in "go.to/refund", or after "www.".
+const WORD_ENDINGS = ['is', 'it', 'in', 'no', 'so', 'to', 'me', 'at', 'be', 'do', 'go', 'us', 'my', 'by', 'as', 'an', 'or', 'of', 'on', 'am', 'hi'];
+// Every other ending can also end a name ("Smith Bros.Roofing"), so it counts in lower case or ALL CAPS, or with a path.
+const OTHER_ENDINGS = TOP_LEVEL_DOMAINS.filter((ending) => !ANY_CASE_ENDINGS.includes(ending) && !WORD_ENDINGS.includes(ending));
+const HOST_LABELS = '\\b(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\\.)+';
+const LINK_PATH = '\\/[^\\s<>"\')]*';
+const DOMAIN_ANY_CASE = new RegExp(`${HOST_LABELS}(?:${ANY_CASE_ENDINGS.join('|')})\\b(?:${LINK_PATH})?`, 'gi');
+const DOMAIN_CAPITALS = new RegExp(`${HOST_LABELS}(?:${OTHER_ENDINGS.map((ending) => ending.toUpperCase()).join('|')})\\b(?:${LINK_PATH})?`, 'g');
+const DOMAIN_WITH_PATH = new RegExp(`${HOST_LABELS}(?:${OTHER_ENDINGS.join('|')})${LINK_PATH}`, 'gi');
+// Any ending in lower case, as links are written, such as greenleaf.example or greenleaf.roofing; a word ending
+// only with a path after it. "Dr.Smith" or "J.Crew" in a name is left alone.
+const BARE_HOST = new RegExp(`${HOST_LABELS}(?!(?:${WORD_ENDINGS.join('|')})\\b(?!\\/))[a-z]{2,24}\\b(?:${LINK_PATH})?`, 'g');
+// A number written with its country code, such as +44 20 7946 0958 or +44 (0)20 7946 0958. Digits may be separated
+// by any dash: hyphen, non-breaking hyphen, figure dash, en and em dash, or minus sign.
+const PHONE_INTERNATIONAL = /\+\d{1,3}(?:[\s.()\-\u2010-\u2015\u2212]{0,2}\d){7,13}\b/g;
+// The same dialled with 011 or 00 before the country code, such as 011 44 20 7946 0958.
+const PHONE_EXIT_CODE = /\b(?:011|00)[\s.\-\u2010-\u2015\u2212]?\d{1,3}(?:[\s.()\-\u2010-\u2015\u2212]{0,2}\d){6,13}\b/g;
 // Ten digits with common separators, with or without a leading 1.
-const PHONE_NUMERIC = /(?:\+?1[\s.-]?)?(?:\(\d{3}\)\s?|\b\d{3}[\s.-]?)\d{3}[\s.-]?\d{4}\b/g;
+const PHONE_NUMERIC = /(?:\+?1[\s.\-\u2010-\u2015\u2212]?)?(?:\(\d{3}\)\s?|\b\d{3}[\s.\-\u2010-\u2015\u2212]?)\d{3}[\s.\-\u2010-\u2015\u2212]?\d{4}\b/g;
 // Toll-free vanity numbers such as 1-800-MEDICARE or 1-800-75-CONED.
 const PHONE_VANITY =
-  /(?:\+?1[\s.-]?)?(?:\(8(?:00|33|44|55|66|77|88)\)\s?|\b8(?:00|33|44|55|66|77|88)[.-])[A-Za-z0-9]{2,8}(?:[.-][A-Za-z0-9]{2,8}){0,2}\b/g;
+  /(?:\+?1[\s.\-\u2010-\u2015\u2212]?)?(?:\(8(?:00|33|44|55|66|77|88)\)\s?|\b8(?:00|33|44|55|66|77|88)[.\-\u2010-\u2015\u2212])[A-Za-z0-9]{2,8}(?:[.\-\u2010-\u2015\u2212][A-Za-z0-9]{2,8}){0,2}\b/g;
 // Seven-digit local numbers.
-const PHONE_LOCAL = /\b\d{3}[\s.-]\d{4}\b/g;
+const PHONE_LOCAL = /\b\d{3}[\s.\-\u2010-\u2015\u2212]\d{4}\b/g;
 
 export const REDACTED_LINK = '[link removed]';
 export const REDACTED_PHONE = '[phone number removed]';
@@ -116,10 +219,17 @@ export const REDACTED_EMAIL = '[email address removed]';
  * back separately, from the registry only.
  */
 export function redactUntrusted(value: string): string {
+  // Invisible characters can hide inside a number or link ("212-55\u200b5-0142"), and are never needed on screen.
   return value
+    .replace(INVISIBLE, '')
     .replace(EMAIL, REDACTED_EMAIL)
     .replace(URL_WITH_SCHEME, REDACTED_LINK)
-    .replace(BARE_DOMAIN, REDACTED_LINK)
+    .replace(DOMAIN_ANY_CASE, REDACTED_LINK)
+    .replace(DOMAIN_CAPITALS, REDACTED_LINK)
+    .replace(DOMAIN_WITH_PATH, REDACTED_LINK)
+    .replace(BARE_HOST, REDACTED_LINK)
+    .replace(PHONE_INTERNATIONAL, REDACTED_PHONE)
+    .replace(PHONE_EXIT_CODE, REDACTED_PHONE)
     .replace(PHONE_NUMERIC, REDACTED_PHONE)
     .replace(PHONE_VANITY, (match) => (match.replace(/[^A-Za-z0-9]/g, '').length >= 10 ? REDACTED_PHONE : match))
     .replace(PHONE_LOCAL, REDACTED_PHONE);
@@ -127,7 +237,7 @@ export function redactUntrusted(value: string): string {
 
 /** True when the text still contains something that looks like a phone number, link or email address. */
 export function containsActionableContact(value: string): boolean {
-  const scrubbed = value.split(REDACTED_LINK).join(' ').split(REDACTED_PHONE).join(' ').split(REDACTED_EMAIL).join(' ');
+  const scrubbed = value.replace(INVISIBLE, '').split(REDACTED_LINK).join(' ').split(REDACTED_PHONE).join(' ').split(REDACTED_EMAIL).join(' ');
   return redactUntrusted(scrubbed) !== scrubbed;
 }
 
